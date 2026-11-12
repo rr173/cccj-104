@@ -194,21 +194,23 @@ def lineage_part(analyzer: LineageAnalyzer) -> list[str]:
     assert STATUS in _refs(n, "control_sources")
     notes.append("[断言4] 三层嵌套后约束继续上带，非单层补丁")
 
-    # 5a) 常量 EXISTS：基础表行集 -> control（删空表影响可追溯）
+    # 5a) 常量 EXISTS：基础表行集 -> existence（删空表影响可追溯）
     r = analyzer.analyze(EXISTS_NONEMPTY)
     name = _field(r, "customer_name")
-    assert ORDERS_ROW_SET in _refs(name, "control_sources")
+    assert ORDERS_ROW_SET in _refs(name, "existence_sources")
     assert ORDERS_ROW_SET not in _refs(name, "value_sources")
-    notes.append("[断言5] 内部只选常量的 EXISTS：orders 行集进入 control")
+    assert ORDERS_ROW_SET not in _refs(name, "control_sources")
+    notes.append("[断言5] 内部只选常量的 EXISTS：orders 行集进入 existence")
 
-    # 5b) 相关 EXISTS：行集 + 内层筛选列都在 control
+    # 5b) 相关 EXISTS：行集 -> existence，内层筛选列 -> control
     r = analyzer.analyze(EXISTS_CORRELATED)
     name = _field(r, "customer_name")
-    control = _refs(name, "control_sources")
-    assert ORDERS_ROW_SET in control and STATUS in control
-    notes.append("[断言6] 相关 EXISTS：行集与 status 同为 control")
+    assert ORDERS_ROW_SET in _refs(name, "existence_sources")
+    assert STATUS in _refs(name, "control_sources")
+    assert ORDERS_ROW_SET not in _refs(name, "control_sources")
+    notes.append("[断言6] 相关 EXISTS：status=control，行集=existence")
 
-    # 6) 标量子查询角色分桶：amount=value，status=control，不得互换
+    # 6) 标量子查询角色分桶：amount=value，status=control，空输入行集=existence
     r = analyzer.analyze(SCALAR_MAX)
     max_paid = _field(r, "max_paid")
     assert _refs(max_paid, "value_sources") == {AMOUNT}
@@ -216,15 +218,20 @@ def lineage_part(analyzer: LineageAnalyzer) -> list[str]:
     assert STATUS in control
     assert AMOUNT not in control
     assert STATUS not in _refs(max_paid, "value_sources")
-    notes.append("[断言7] 嵌套 MAX(amount)：amount=value、status=control，角色不混淆")
+    assert ORDERS_ROW_SET in _refs(max_paid, "existence_sources")
+    notes.append(
+        "[断言7] 嵌套 MAX(amount)：amount=value、status=control、"
+        "空输入行集=existence，三类原因不混淆"
+    )
 
-    # 7) IN 子查询：筛选与行集均为 control
+    # 7) IN 子查询：比较列 -> control，行集为空 -> existence
     r = analyzer.analyze(IN_SUBQ)
     name = _field(r, "customer_name")
-    control = _refs(name, "control_sources")
-    assert STATUS in control and ORDERS_ROW_SET in control
+    assert STATUS in _refs(name, "control_sources")
+    assert ORDERS_ROW_SET in _refs(name, "existence_sources")
+    assert ORDERS_ROW_SET not in _refs(name, "control_sources")
     assert _refs(name, "value_sources") == {CUST_NAME}
-    notes.append("[断言8] IN 子查询：内部筛选与行集整体归 control")
+    notes.append("[断言8] IN 子查询：内部筛选=control、行集=existence")
 
     # 8) 负向：金额分支条件不得泄漏到旁边的固定标记
     r = analyzer.analyze(BRANCH_LOCAL)
@@ -240,11 +247,14 @@ def lineage_part(analyzer: LineageAnalyzer) -> list[str]:
     deps = field_dependencies(r, "max_paid")
     assert deps["value_sources"] == [AMOUNT]
     assert STATUS in deps["control_sources"]
+    assert ORDERS_ROW_SET in deps["existence_sources"]
     amount_impact = downstream_impact(r, AMOUNT)["impacted_fields"][0]
     status_impact = downstream_impact(r, STATUS)["impacted_fields"][0]
+    row_set_impact = downstream_impact(r, ORDERS_ROW_SET)["impacted_fields"][0]
     assert amount_impact["impact_types"] == ["value"]
     assert status_impact["impact_types"] == ["control"]
-    notes.append("[断言10] deps 与 impact 入口对 value/control 角色结论一致")
+    assert row_set_impact["impact_types"] == ["existence"]
+    notes.append("[断言10] deps 与 impact 入口对 value/control/existence 结论一致")
 
     return notes
 

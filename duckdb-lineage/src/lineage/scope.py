@@ -8,6 +8,9 @@
 * :class:`TableBinding`：目录中的基础表，列解析为 ``catalog.schema.table.column``；
 * :class:`DerivedBinding`：子查询/CTE 等派生关系，列解析结果需要 *重定基*
   （rebase）到派生关系内部字段的基础身份，而不是把两层同名别名拼成假边。
+
+来源分三桶（见 :mod:`lineage.model`）：value（值计算）、control（匹配/选择/
+分组/排序）、existence（行集是否为空）。三者语义不同，跨层传递时保持分桶。
 """
 
 from __future__ import annotations
@@ -51,32 +54,42 @@ class TableBinding:
 class DerivedBinding:
     """派生关系绑定：CTE、FROM (SELECT ...) 子查询。
 
-    ``inner_fields`` 记录派生关系每个输出列名 -> 该列内部已算出的来源集合。
+    ``inner_fields`` 记录派生关系每个输出列名 -> 该列内部已算出的三桶来源；
     解析外层引用时，把内层来源的路径前置外层访问路径，完成重定基。
 
-    ``row_filters`` 是关系级筛选（WHERE/JOIN ON/HAVING/QUALIFY）的来源：
-    它们决定派生关系的 *行能否存在*，即使外层一列都不引用也不能丢。
+    ``row_filters`` 是关系级 *匹配/选择* 来源：外层即使一个内层列都不引用
+    （COUNT(*)、固定标记、只取连接对侧列），这些约束仍须上带。
+
+    ``row_existence`` 是关系级 *行集为空* 来源，例如内层 WHERE 里的 EXISTS。
+    ``row_sets`` 是外层按行计数/判空时真正依赖的基数行集；恒单行关系
+    （无分组的聚合 / 无 FROM 且无 WHERE 的常量查询）在这里为空。
     """
 
     alias: str
     column_names: list[str]
-    # name -> {"value": list[Source], "control": list[Source]}
+    # name -> {"value": [...], "control": [...], "existence": [...]}
     inner_fields: dict[str, dict[str, list[Source]]]
-    # 派生关系内部可见的行集标记（供 COUNT(*) 跨层透传）
+    # 外层 COUNT(*) 等行计数/判空依赖的基数行集标记
     row_sets: list[Source] = field(default_factory=list)
-    # 关系级筛选来源（决定本关系行存在性，独立于外层选中了哪些列）
+    # 关系级"行能否存在/被选中"的匹配来源
     row_filters: list[Source] = field(default_factory=list)
+    # 关系级谓词内部的存在性来源（例如 WHERE 里的 EXISTS 依赖的行集）
+    row_existence: list[Source] = field(default_factory=list)
+    # 该派生关系输出行数恒为 1（与底层表行数无关）
+    constant_cardinality: bool = False
+    # 恒单行且空输入时投影值变 NULL（SUM/MIN/MAX 等；COUNT 为空输入返回 0）
+    null_on_empty_value: bool = False
 
     @property
     def names(self) -> list[str]:
-        return list(self.column_names)
+        return self.column_names
 
     def resolve_column(
         self,
         column: str,
         path: tuple[str, ...],
     ) -> ExprSources:
-        """重定基时严格保留内层的 value/control 分桶。"""
+        """重定基时严格保留内层的 value/control/existence 分桶。"""
         if column not in self.inner_fields:
             return ExprSources()
         inner = self.inner_fields[column]
@@ -88,6 +101,10 @@ class DerivedBinding:
             control=[
                 Source(ref=s.ref, kind=s.kind, path=path + s.path)
                 for s in inner["control"]
+            ],
+            existence=[
+                Source(ref=s.ref, kind=s.kind, path=path + s.path)
+                for s in inner["existence"]
             ],
         )
 
@@ -118,26 +135,84 @@ class Scope:
     named_windows: dict[str, exp.Window] = field(default_factory=dict)
     # 本 SELECT 的输出字段（分析完成后填充），供外层派生绑定/子查询重定基
     output_fields: list[dict[str, Any]] = field(default_factory=list)
-    # 关系层筛选（WHERE/JOIN ON/HAVING/QUALIFY）的全部来源，决定本 SELECT
-    # 每一行是否存在/被选中；与外层最终引用了哪个输出列无关，派生关系据此
-    # 把"记录能否进入结果"的约束独立上带
-    row_filters: list[Source] = field(default_factory=list)
-    # 本层可见的行集标记（COUNT(*) 透传用）
+
+    # -- 关系级来源 -------------------------------------------------------
+    # 本 SELECT 自身 WHERE/JOIN ON/HAVING/QUALIFY 谓词的匹配来源
+    predicate_control: list[Source] = field(default_factory=list)
+    # 上述谓词内部的存在性来源（例如 WHERE 里的 EXISTS 依赖的行集）
+    predicate_existence: list[Source] = field(default_factory=list)
+    # GROUP BY 的匹配来源（分组键影响行数与取值，不决定"是否为空"）
+    group_control: list[Source] = field(default_factory=list)
+    # FROM/JOIN 中派生关系上带的匹配/存在性来源
+    inherited_control: list[Source] = field(default_factory=list)
+    inherited_existence: list[Source] = field(default_factory=list)
+    # 汇总后分发到本层全部输出字段的关系级来源（匹配 / 存在性）
+    relation_control: list[Source] = field(default_factory=list)
+    relation_existence: list[Source] = field(default_factory=list)
+    # 聚合后的行过滤（HAVING/QUALIFY）：即使恒单行也可能把该行过滤掉
+    post_aggregate_control: list[Source] = field(default_factory=list)
+    post_aggregate_existence: list[Source] = field(default_factory=list)
+    # 派生关系上带时真正"决定输出行能否存在"的来源（恒单行关系已剔除
+    # 只改变聚合输入的 WHERE/JOIN ON）
+    row_select_control: list[Source] = field(default_factory=list)
+    row_select_existence: list[Source] = field(default_factory=list)
+    # 本关系底层数据的行集标记（某一基础关系是否还有行）
     row_sets: list[Source] = field(default_factory=list)
+    # 恒单行关系（无 GROUP BY/HAVING/QUALIFY/LIMIT 的聚合，或无 FROM 且无
+    # WHERE 的常量查询）：输出行数恒为 1，与底层表行数无关。
+    constant_cardinality: bool = False
+    # 恒单行关系在"输入集合为空"时，投影值是否会从具体值变成 NULL
+    # （SUM/MIN/MAX/AVG 为真；COUNT 为假，空输入返回 0）。
+    null_on_empty_value: bool = False
 
-    def existence_sources(self) -> list[Source]:
-        """EXISTS/IN 子查询整体作为存在性判断时上报的全部来源。
+    # ---- 对外的语义接口 ----
 
-        包含三类：关系级筛选、每个输出字段的值/控制来源，以及 FROM/JOIN
-        引入的行集标记。内部只选常量（``SELECT 1``）时，字段来源为空，
-        但只要 FROM 了基础表，行集标记仍能表达"该表是否非空"对结果的影响。
+    def exists_sources(self) -> ExprSources:
+        """EXISTS/NOT EXISTS 整体的来源：只问"谓词能否找到记录"。
+
+        * 恒单行关系（如 ``SELECT COUNT(*) FROM orders``）：无论底层表是否有
+          行 EXISTS 都是真 -> 没有任何来源；SELECT 列表中的列只是占位，不参与
+          筛选，绝不被当成影响结果的因素。
+        * 其余情况：谓词里的匹配来源进 control，来自 WHERE 的存在性来源与
+          底层行集标记进 existence（删空表会改变 EXISTS 结果）。
         """
-        out: list[Source] = list(self.row_filters)
+        if self.constant_cardinality:
+            return ExprSources()
+        # GROUP BY 键不算 EXISTS 来源：只要输入有行，分组后至少有一个组；
+        # 分组键取值本身不改变"能否找到记录"（它只影响标量/IN 的取值）。
+        return ExprSources(
+            control=list(self.inherited_control) + list(self.predicate_control),
+            existence=list(self.relation_existence) + list(self.row_sets),
+        )
+
+    def scalar_extra_existence(self) -> list[Source]:
+        """标量子查询"输入集合变空 -> 结果变 NULL/消失"的存在性来源。
+
+        非恒单行关系：输入集合变空则不再有输出行，标量结果变成 NULL，行集
+        必须可追溯。恒单行关系：聚合仍返回一行，但 SUM/MIN/MAX/AVG 等空输入
+        返回 NULL（这段 NULL 变化必须能追到行集）；COUNT 空输入返回 0、其行集
+        已是 value 来源，不构成 NULL 变化，不重复上报。
+        """
+        if not self.constant_cardinality:
+            return list(self.row_sets)
+        return list(self.row_sets) if self.null_on_empty_value else []
+
+    def in_sources(self) -> ExprSources:
+        """IN (subquery) 的成员判断来源。
+
+        与 EXISTS 不同，IN 会读取子查询投影列的 *取值* 来做成员比较，因此投影
+        列（value + control）属于 control（匹配过滤）；底层行集是否还有行属于
+        existence。
+        """
+        control: list[Source] = []
+        existence: list[Source] = []
         for item in self.output_fields:
-            out.extend(item["value"])
-            out.extend(item["control"])
-        out.extend(self.row_sets)
-        return out
+            control.extend(item["value"])
+            control.extend(item["control"])
+            existence.extend(item["existence"])
+        if not self.constant_cardinality:
+            existence.extend(self.row_sets)
+        return ExprSources(control=control, existence=existence)
 
     # ---- 关系名解析（CTE 遮蔽基础表的关键） ----
 
@@ -180,13 +255,16 @@ class Scope:
         if column.table:
             binding = self._resolve_qualified_table(column.table, loc)
             sources = binding.resolve_column(column.name, path)
-            if not sources.value and not sources.control:
+            if not sources.value and not sources.control and not sources.existence:
                 raise UnknownColumnError(
                     f"{column.table}.{column.name}", loc
                 )
             return sources
 
         return self._resolve_unqualified(column.name, path, loc)
+
+    def locate(self, node: exp.Expression) -> ErrorLocation | None:
+        return self._locate(node)
 
     def _locate(self, node: exp.Expression) -> ErrorLocation | None:
         if self.positions is None:
@@ -242,6 +320,10 @@ class Scope:
                 control=[
                     Source(ref=s.ref, kind=s.kind, path=path + s.path)
                     for s in inner["control"]
+                ],
+                existence=[
+                    Source(ref=s.ref, kind=s.kind, path=path + s.path)
+                    for s in inner["existence"]
                 ],
             )
 

@@ -1,21 +1,27 @@
 """表达式级血缘分析。
 
-输出统一为两个来源桶：
+输出统一为三类来源桶（见 :mod:`lineage.model`）：
 
 * value：表达式 *值* 依赖的来源；
-* control：表达式中只起 *条件/选择* 作用的来源。
+* control：表达式中起 *匹配/选择/分组/排序* 作用的来源；
+* existence：表达式结果是否为空所依赖的行集标记（``row_set:``）。
 
 关键规则：
 
 * CASE 的 WHEN 条件 -> control；THEN/ELSE 分支 -> value。
 * 窗口函数的参数 -> value；PARTITION BY / ORDER BY -> control。
-* COUNT(*) / COUNT(1) 不伪造全列依赖，记为基础关系的 *行集标记*
-  （``row_set:<fq_table>``）；无参 ROW_NUMBER/RANK 同理。
-* EXISTS / NOT EXISTS / IN 子查询内部全部来源记为 control（只决定外层行是否
-  存在）；内部只选常量时，FROM 关系的行集标记仍作为 control 上带，保证
-  "删空基础表 -> 外层结果变化"这条因果可追溯。
-* 标量子查询严格沿用内层字段的 value/control 角色重定基，不把筛选里的取值列
-  改判为 control，也不把过滤列提升为 value。
+* COUNT(*) / COUNT(1) 不伪造全列依赖，记为基础关系的 *行集标记*，放在
+  value 桶（这是"行数是多少"的取值来源）。
+* EXISTS / NOT EXISTS 只问"谓词能否找到记录"：内部匹配条件进 control、
+  行集进 existence；内部 SELECT 列表即使出现列，也只是占位，不参与筛选，
+  绝不被当成影响结果的因素。内部是恒单行关系（如无分组 COUNT）时 EXISTS
+  恒为真，不产生来源。
+* 标量子查询：内层字段的 value 桶原样透传为外层 value；内层匹配条件进
+  control；但当子查询用于"返回一个值"时，输入集合变空会让具体值变成 NULL
+  （或整行消失），这条存在性变化必须能由 existence 桶追到行集，同时保留
+  具体的匹配条件。无分组的单行聚合（COUNT 等）在空输入时仍返回一行，不把
+  内层筛选扩散成外层每个输出的行选择来源。
+* IN (subquery) 读取投影列做成员比较 -> 投影列进 control，行集进 existence。
 """
 
 from __future__ import annotations
@@ -24,7 +30,7 @@ from sqlglot import exp
 
 from .errors import LineageUnsupported
 from .model import ExprSources, Source, row_set_marker
-from .scope import Scope
+from .scope import Scope, TableBinding
 
 # 无参数（或仅常量参数）聚合/窗口函数：值依赖退化为行集标记
 _ROW_SET_AGGREGATES = {
@@ -40,7 +46,7 @@ _AGGREGATE_FUNCS = {
 
 
 class ExpressionAnalyzer:
-    """在给定作用域下把表达式拆成 value/control 两个来源桶。"""
+    """在给定作用域下把表达式拆成 value/control/existence 三类来源桶。"""
 
     def __init__(self, scope: Scope) -> None:
         self.scope = scope
@@ -65,9 +71,10 @@ class ExpressionAnalyzer:
             return self._case(node, path)
         if isinstance(node, exp.Window):
             return self._window(node, path)
-        if isinstance(node, (exp.Exists, exp.Not)):
-            # NOT 只包裹 EXISTS/布尔表达式，本身不引入来源
-            return self._not_exists(node, path)
+        if isinstance(node, exp.Not):
+            return self._not(node, path)
+        if isinstance(node, exp.Exists):
+            return self._exists(node, path)
         if isinstance(node, exp.Subquery):
             return self._scalar_subquery(node, path)
         if isinstance(node, exp.In):
@@ -152,31 +159,26 @@ class ExpressionAnalyzer:
             out.extend(self._as_control(src))
         return out
 
-    def _not_exists(
-        self, node: exp.Exists | exp.Not, path: tuple[str, ...]
-    ) -> ExprSources:
-        target = node
-        if isinstance(node, exp.Not):
-            target = node.this
-        if not isinstance(target, exp.Exists):
-            # 普通 NOT <boolean expr>：子表达式本身就是条件
-            return self._as_control(self._visit(target, path + ("not",)))
-        sub = target.this
-        sub_scope = self.scope.child_scopes.get(id(sub))
+    def _not(self, node: exp.Not, path: tuple[str, ...]) -> ExprSources:
+        """NOT 只翻转布尔值，不引入来源；子表达式的桶保持不变。"""
+        return self._visit(node.this, path + ("not",))
+
+    def _exists(self, node: exp.Exists, path: tuple[str, ...]) -> ExprSources:
+        sub_scope = self.scope.child_scopes.get(id(node.this))
         if sub_scope is None:  # pragma: no cover - 构造期保证已建
             raise LineageUnsupported("EXISTS 子查询作用域未初始化")
         out = ExprSources()
-        # EXISTS 只做存在性判断：内部全部来源（含仅选常量时的基础表行集标记）
-        # 统一归 control。行集标记保证"内部只选常量、仅凭表是否非空决定保留"
-        # 的场景也能追到基础行集。
-        for src in sub_scope.existence_sources():
-            out.control.append(
-                Source(
-                    ref=src.ref,
-                    kind=src.kind,
-                    path=path + ("exists",) + src.path,
-                )
-            )
+        # EXISTS 只看谓词能否找到记录：内部输出列表是占位，内部匹配条件与
+        # 行集才是原因；内部恒单行时由 sub_scope 返回空。
+        sub = sub_scope.exists_sources()
+        out.control.extend(
+            Source(ref=s.ref, kind=s.kind, path=path + ("exists",) + s.path)
+            for s in sub.control
+        )
+        out.existence.extend(
+            Source(ref=s.ref, kind=s.kind, path=path + ("exists",) + s.path)
+            for s in sub.existence
+        )
         return out
 
     def _scalar_subquery(
@@ -185,20 +187,58 @@ class ExpressionAnalyzer:
         sub_scope = self.scope.child_scopes.get(id(node.this))
         if sub_scope is None:  # pragma: no cover
             raise LineageUnsupported("标量子查询作用域未初始化")
+        if len(sub_scope.output_fields) > 1:
+            raise LineageUnsupported(
+                "标量子查询只能返回单列，实际返回 "
+                f"{len(sub_scope.output_fields)} 列",
+                self.scope.locate(node),
+            )
         out = ExprSources()
-        # 标量子查询只允许单列。严格沿用内层字段的角色分桶：
-        # 内层 value -> 外层 value（取值来源），内层 control -> 外层 control
-        # （筛选/选择来源）。不得把内层过滤里的取值列（如 MAX 的 amount）
-        # 重新打成 control，也不得把过滤列（如 status）提升为 value。
+        # 标量子查询：内层 value 原样透传为外层 value（取值来源），内层匹配
+        # 条件进 control；不把内层过滤里的取值列（如 MAX 的 amount）改判为
+        # control，也不把过滤列（如 status）改判为 value。
         for field_ in sub_scope.output_fields:
             for src in field_["value"]:
                 out.value.append(
-                    Source(ref=src.ref, kind=src.kind, path=path + ("scalar_subquery",) + src.path)
+                    Source(
+                        ref=src.ref,
+                        kind=src.kind,
+                        path=path + ("scalar_subquery",) + src.path,
+                    )
                 )
             for src in field_["control"]:
                 out.control.append(
-                    Source(ref=src.ref, kind=src.kind, path=path + ("scalar_subquery",) + src.path)
+                    Source(
+                        ref=src.ref,
+                        kind=src.kind,
+                        path=path + ("scalar_subquery",) + src.path,
+                    )
                 )
+            for src in field_["existence"]:
+                out.existence.append(
+                    Source(
+                        ref=src.ref,
+                        kind=src.kind,
+                        path=path + ("scalar_subquery",) + src.path,
+                    )
+                )
+        # 子查询用于返回一个值：输入集合变空 -> 具体值变 NULL（相关子查询
+        # 则等价于该输出行在空集合上取不到值）。因此内层行集必须可在
+        # existence 桶追到；同时保留内层具体匹配条件为 control。
+        # 若字段自身已带了同一行集（如恒单行 SUM 的 NULL 语义），不重复上报。
+        already = {
+            (s.ref, s.kind)
+            for s in out.existence
+        }
+        out.existence.extend(
+            Source(
+                ref=s.ref,
+                kind=s.kind,
+                path=path + ("scalar_subquery", "empty_input") + s.path,
+            )
+            for s in sub_scope.scalar_extra_existence()
+            if (s.ref, s.kind) not in already
+        )
         return out
 
     def _in(self, node: exp.In, path: tuple[str, ...]) -> ExprSources:
@@ -226,16 +266,24 @@ class ExpressionAnalyzer:
                 sub_scope = self.scope.child_scopes.get(id(candidate.this))
                 if sub_scope is None:  # pragma: no cover
                     raise LineageUnsupported("IN 子查询作用域未初始化")
-                # IN 子查询整体是选择条件：字段来源与行集标记全部归 control，
-                # 行集标记保证内部只选常量时仍可追溯基础行集的存在性影响。
-                for src in sub_scope.existence_sources():
-                    out.control.append(
-                        Source(
-                            ref=src.ref,
-                            kind=src.kind,
-                            path=path + ("in", label) + src.path,
-                        )
+                # IN 读取子查询投影列做成员比较（control），行集是否为空属 existence
+                sub = sub_scope.in_sources()
+                out.control.extend(
+                    Source(
+                        ref=s.ref,
+                        kind=s.kind,
+                        path=path + ("in", label) + s.path,
                     )
+                    for s in sub.control
+                )
+                out.existence.extend(
+                    Source(
+                        ref=s.ref,
+                        kind=s.kind,
+                        path=path + ("in", label) + s.path,
+                    )
+                    for s in sub.existence
+                )
             elif isinstance(candidate, exp.Expression):
                 out.extend(
                     self._as_control(
@@ -329,11 +377,11 @@ class ExpressionAnalyzer:
         return list(order.expressions)
 
     def _row_set_markers(self, path: tuple[str, ...]) -> list[Source]:
-        """当前作用域 FROM/JOIN 可见的全部基础关系行集标记。"""
+        """当前作用域 FROM/JOIN 可见的基数行集标记。"""
         markers: list[Source] = []
         for alias in sorted(self.scope.bindings):
             binding = self.scope.bindings[alias]
-            if hasattr(binding, "table"):
+            if isinstance(binding, TableBinding):
                 markers.append(
                     Source(
                         ref=row_set_marker(binding.table.fq_name),
@@ -341,21 +389,25 @@ class ExpressionAnalyzer:
                         path=path + (f"alias:{alias}",),
                     )
                 )
-            else:  # 派生关系：透传其内部行集标记
-                for src in binding.row_sets:
-                    markers.append(
-                        Source(ref=src.ref, kind=src.kind, path=path + src.path)
-                    )
+            else:  # 派生关系：透传其基数行集标记
+                markers.extend(
+                    Source(ref=s.ref, kind=s.kind, path=path + s.path)
+                    for s in binding.row_sets
+                )
         return markers
 
     @staticmethod
     def _as_control(src: ExprSources) -> ExprSources:
-        """把一个子表达式的全部来源（含 value）重新归类为 control。"""
+        """把一个子表达式的 value/control 重新归类为 control。
+
+        existence 桶保持原样：例如 CASE WHEN EXISTS(...) 里删空基础表的影响
+        仍然只在 existence，不会被并进匹配条件。
+        """
         moved = [
             Source(ref=s.ref, kind=s.kind, path=s.path)
             for s in src.value + src.control
         ]
-        return ExprSources(control=moved)
+        return ExprSources(control=moved, existence=list(src.existence))
 
     @staticmethod
     def _is_constant_arg(node: exp.Expression | None) -> bool:

@@ -13,7 +13,7 @@
 | 表达式 | 算术/比较/逻辑/函数、`CASE WHEN` | CASE 条件→control，THEN/ELSE→value |
 | 窗口 | 窗口函数、内联 `OVER`、命名 `WINDOW` 子句 | 参数→value；PARTITION BY/ORDER BY→control |
 | 聚合 | SUM/AVG/MIN/MAX/COUNT 等 | `COUNT(*)`/无参排名函数→行集标记 |
-| 子查询谓词 | 相关/非相关 `EXISTS`、`NOT EXISTS`、`IN (subquery)`、标量子查询 | EXISTS/IN 内部来源整体归 control |
+| 子查询谓词 | 相关/非相关 `EXISTS`、`NOT EXISTS`、`IN (subquery)`、标量子查询 | EXISTS/NOT EXISTS 只取匹配列(control)与行集(existence)；IN 另取投影列(control)；标量子查询保留 value/control 并补 existence |
 | 过滤 | `WHERE`、`HAVING`、`QUALIFY`、`GROUP BY` | 关系层谓词整体归 control，分发到全部输出字段 |
 | 投影 | 裸 `*`、限定 `t.*`、列别名 | 按目录/派生绑定逐列展开 |
 | 名字解析 | CTE 遮蔽基础表、相关子查询外层绑定、限定/未限定列、投影别名 | 未限定列多候选→歧义诊断 |
@@ -42,23 +42,82 @@
 > 注意："DuckDB 能执行"不等于"能静态抽血缘"。递归 CTE 在 DuckDB 合法，但本工具
 > 仍按上表拒绝，以保证任何 `status=ok` 的结果都是完整可信的。
 
-## 3. 两类依赖的语义边界
+## 3. 三类依赖的语义边界
 
-* `value_sources`：参与输出字段 **值计算** 的来源。修改这些基础列会改变字段取值。
-* `control_sources`：只影响结果 **存在性/选择/分组/排序** 的来源，包括
-  `WHERE`、`HAVING`、`QUALIFY`、`JOIN ON`、CASE 条件、窗口 `PARTITION BY`/`ORDER BY`、
-  `EXISTS`/`IN` 子查询内部。修改这些列会改变"哪些行出现/如何分框"，但不改变
-  单行内字段的计算公式。
+依赖按 **变化原因** 分三类，不能用"把所有来源并进一个桶"的方式让边数看起来完整：
 
-同一基础列可以同时出现在两个桶（例如 HAVING 引用的聚合表达式既算值又做筛选）。
+* `value_sources`：参与输出字段 **值计算** 的来源。修改它会改变字段取值
+  （算术、聚合参数、投影列）。
+* `control_sources`：只影响 **哪些行能匹配/被选中/被分组/被排序** 的来源，
+  包括 `WHERE`、`HAVING`、`QUALIFY`、`JOIN ON`、`GROUP BY`、CASE 条件、窗口
+  `PARTITION BY`/`ORDER BY`、`EXISTS`/`IN` 的匹配/比较列。修改它会改变"哪些
+  行出现/如何分框"，但不改变单行内字段的计算公式。
+* `existence_sources`：只影响 **行集/子结果是否为空** 的来源，即
+  `row_set:catalog.schema.table` 标记。它回答"这里是否还有行/记录能否找到"，
+  而不是"按什么条件匹配"。
+
+同一基础列若真的同时承担多种角色（如 HAVING 引用的聚合表达式既算值又做筛选），
+可以同时出现在多个桶；但不得把只承担一种角色的来源挪进另一个桶来凑边。
 `sql/09_filter_only_column.sql` 是反证用例：`city`/`tier` 只在 WHERE 出现，
-因此只进 control，证明两类依赖确实可分。
+因此只进 control，证明 value/control 确实可分。
 
-### 行存在性约束的独立上带（row_filters）
+### EXISTS / NOT EXISTS：谓词能否找到记录
 
-关系层谓词（`WHERE`/`JOIN ON`/`HAVING`/`QUALIFY`）决定的是 **本关系的行能否
-存在**，与外层最终引用了哪个输出列无关。因此派生表/CTE 的这类来源单独记为
-`row_filters` 并随绑定上带，而不是绑死在被选中的列上：
+`EXISTS`/`NOT EXISTS` 只问"谓词能否找到记录"，子查询 SELECT 列表是 **占位**，
+不是筛选条件：
+
+* 处理 `NOT EXISTS` 与 `EXISTS` 对称；`NOT` 只翻转布尔值，不引入来源；
+* 内层 WHERE/JOIN ON 的匹配列、GROUP BY 键 -> `control_sources`；
+* 底层 FROM 关系的行集标记 -> `existence_sources`（删空表会让 EXISTS 翻转，
+  这是"集合是否为空"而非"匹配条件"的变化）；
+* 只出现在 SELECT 列表里的列（如 `SELECT o.amount, o.status FROM orders o`）
+  **不进入任何桶**：单独修改它们，数据库结果不变。见
+  `sql/15_exists_projection_placeholder.sql`、`sql/16_not_exists.sql`；
+* 内层是恒单行的无分组聚合（`EXISTS (SELECT COUNT(*) FROM orders)`）时，
+  无论底层表是否有行 EXISTS 恒为真 -> 不产生任何来源，更不把 `COUNT` 的行集
+  标记误报为存在性来源。
+
+### 标量子查询：返回一个值时，空输入会让结果变 NULL
+
+标量子查询用于返回一个值：内层 value 原样重定基为外层 value，内层匹配条件
+重定基为 control。它还会在"输入集合为空"时把具体值变成 NULL（或整行消失），
+这条变化必须能追到行集：
+
+* 非恒单行内层（普通明细/未聚合子查询）：底层行集标记进 `existence_sources`；
+  见 `sql/17_scalar_constant_with_predicate.sql`（只返回常量 1，删掉最后一笔
+  匹配订单后结果从 1 变成 NULL）；
+* 恒单行内层（无分组聚合）：SUM/MIN/MAX/AVG 空输入返回 NULL -> 行集进
+  `existence_sources`；COUNT 空输入返回 0（不是 NULL），行集作为取值来源留在
+  `value_sources`，不重复上报为 existence。见 `sql/13_join_name_and_scalar_role.sql`；
+* 无论哪种情况，内层具体的匹配条件（如 `o.status='PAID'`）都保留为 control，
+  不能只留下一个"行集为空"的粗粒度来源。
+
+### IN (subquery)：读取投影列做成员比较
+
+与 EXISTS 不同，`IN` 会读取子查询投影列的取值做成员比较，因此投影列属于
+`control_sources`（匹配过滤），底层行集是否还有行属于 `existence_sources`。
+
+### 空输入的无分组聚合：行筛选不得扩散为外层行选择
+
+无 GROUP BY 且投影含聚合的 SELECT（如 `SELECT COUNT(*) FROM orders WHERE ...`）
+输出行数恒为 1：删空输入后 COUNT 返回 0，**仍然有一行**。因此：
+
+* 它作为派生关系被外层消费时，不贡献基数行集（外层 `COUNT(*)` 恒为 1，与底层
+  行数无关）；
+* 内层 `WHERE`/`JOIN ON` 只改变聚合取值，不改变"是否有一行"，**不作为关系级
+  行选择来源上带**，否则会把内层筛选扩散成外层每个输出字段（包括固定常量）
+  的行选择来源；
+* 内层筛选列仍是该聚合字段本身的 `control_sources`（它们确实改变取值）；
+* `HAVING`/`QUALIFY` 是聚合后的行过滤，仍可能过滤掉那一行，照常上带。
+
+见 `sql/18_empty_input_aggregate.sql`：外层固定标记 `marker` 不得因内层
+`status` 产生任何依赖。
+
+### 普通派生关系的行选择来源独立上带（row_filters）
+
+普通关系（非恒单行）的 `WHERE`/`JOIN ON` 决定 **本关系的行能否存在**，与外层
+最终引用了哪个输出列无关。因此派生表/CTE 的这类来源单独记为 `row_filters`
+并随绑定上带，而不是绑死在被选中的列上：
 
 * 外层 `COUNT(*)`、输出固定常量标记、或连接后只取对侧列（一个内层列都不引用）
   时，内层筛选仍出现在外层字段的 `control_sources`（见
@@ -66,19 +125,29 @@
 * 约束可穿透任意层嵌套，逐层前置 `relation_filter` 路径，不是单层补丁；
 * 表达式内部的局部条件不享受这条规则：`CASE WHEN status=... THEN amount` 中的
   `status` 只约束该字段本身，不会泄漏到同层相邻的固定标记字段。关系层 WHERE
-  与表达式级 CASE 条件据此严格区分，不做"汇总所有列来源"的近似。
+  与表达式级 CASE 条件据此严格区分，不做"汇总所有列来源"的近似；
+* **例外**：恒单行的无分组聚合没有行选择语义，其内层 WHERE 不进入 `row_filters`
+  （见上节"空输入的无分组聚合"）。
 
-### EXISTS / IN 与行集标记
+### 根因：为什么旧图会互相矛盾
 
-`EXISTS`/`IN (subquery)` 只做存在性判断，内部来源整体归 control。即使子查询
-只选常量（`SELECT 1 FROM orders`），其 FROM 关系的行集标记
-`row_set:shop.main.orders` 仍作为 control 上带：删空该表会改变外层保留的行，
-这条因果因此可追溯（见 `sql/14_exists_row_set.sql`）。
+线上两条 SQL 暴露的是同一个建模错误——把"不同变化原因"并进一个桶：
 
-标量子查询严格沿用内层字段的角色分桶：内层 value 重定基为外层 value，内层
-control 重定基为外层 control。因此按付款状态取最大金额
-`(SELECT MAX(amount) ... WHERE status='PAID')` 中 `amount` 仅是 value、
-`status` 仅是 control，不会出现角色互换。
+1. 旧实现让 `EXISTS` 上报子查询的 **全部输出字段来源**（含 SELECT 列表里的
+   `amount`/`status`）。这些列只是占位，单独修改它们数据库结果不变，却被
+   画成影响客户名单的 control 边，导致评审追查无关改动。修复：EXISTS 只取
+   谓词内的匹配来源与行集，投影占位列不进入任何桶。
+2. 旧实现没有"行集是否为空"这一独立原因，把 `row_set:` 并进 control；同时
+   标量子查询只沿用内层字段的 value/control，常量投影没有基础列来源，于是
+   "删掉最后一笔订单、结果 1 -> NULL"在图上完全找不到订单来源。修复：新增
+   `existence_sources`，把行集为空的变化单列；标量子查询额外补上这一来源，
+   并把内层匹配条件保留为 control。
+3. 旧实现把派生关系的内层 WHERE 一律当作外层行选择来源，连 `COUNT(*)` 这种
+   空输入仍返回一行的聚合也照搬，使内外层语义串味。修复：按基数语义区分，
+   恒单行的无分组聚合不扩散内层筛选。
+
+三类原因分别落在 value/control/existence，`deps` 与 `impact` 入口都按同一
+分桶输出 `impact_types`。
 
 ## 4. 错误定位方式
 

@@ -75,8 +75,10 @@ def test_correlated_exists_only_control(analyzer):
         control = _refs(field, "control_sources")
         assert "shop.main.order_items.qty" in control
         assert "shop.main.order_items.order_id" in control
-        # EXISTS 内部 FROM 的行集也必须作为 control（删空表会改变外层结果）
-        assert "row_set:shop.main.order_items" in control
+        # EXISTS 内部 FROM 的行集是"行集是否为空"原因，单列 existence，
+        # 不并进匹配条件 control（两者是不同变化原因）。
+        assert "row_set:shop.main.order_items" in _refs(field, "existence_sources")
+        assert "row_set:shop.main.order_items" not in control
         assert "row_set:shop.main.order_items" not in value
 
 
@@ -313,7 +315,7 @@ def test_row_filter_survives_multi_layer_nesting(analyzer):
 
 def test_exists_constant_select_traces_base_row_set(analyzer):
     # 内部只选常量、仅凭 orders 是否非空决定客户记录是否保留：
-    # 删空 orders 后结果消失，因此 orders 行集必须作为 control 出现。
+    # 删空 orders 后结果消失，因此 orders 行集必须可追溯到 existence。
     sql = """
         SELECT c.name AS customer_name
         FROM customers AS c
@@ -321,10 +323,12 @@ def test_exists_constant_select_traces_base_row_set(analyzer):
     """
     result = analyzer.analyze(sql)
     name = _field(result, "customer_name")
-    assert "row_set:shop.main.orders" in _refs(name, "control_sources")
+    existence = _refs(name, "existence_sources")
+    assert "row_set:shop.main.orders" in existence
     assert "row_set:shop.main.orders" not in _refs(name, "value_sources")
+    assert "row_set:shop.main.orders" not in _refs(name, "control_sources")
 
-    # 相关 EXISTS：内层 WHERE 的列与行集都应可追溯
+    # 相关 EXISTS：内层匹配列进 control，行集进 existence
     correlated = """
         SELECT c.name AS customer_name
         FROM customers AS c
@@ -334,9 +338,8 @@ def test_exists_constant_select_traces_base_row_set(analyzer):
         )
     """
     corr = _field(analyzer.analyze(correlated), "customer_name")
-    control = _refs(corr, "control_sources")
-    assert "row_set:shop.main.orders" in control
-    assert "shop.main.orders.status" in control
+    assert "row_set:shop.main.orders" in _refs(corr, "existence_sources")
+    assert "shop.main.orders.status" in _refs(corr, "control_sources")
 
 
 def test_scalar_subquery_preserves_value_control_roles(analyzer):
@@ -399,7 +402,11 @@ def test_in_subquery_filter_and_row_set_are_control(analyzer):
     name = _field(result, "customer_name")
     control = _refs(name, "control_sources")
     assert "shop.main.orders.status" in control
-    assert "row_set:shop.main.orders" in control
+    # IN 读取投影列做成员比较 -> 投影列属于匹配原因(control)
+    assert "shop.main.orders.customer_id" in control
+    # 行集是否为空属于 existence，不与匹配条件混桶
+    assert "row_set:shop.main.orders" in _refs(name, "existence_sources")
+    assert "row_set:shop.main.orders" not in control
     assert _refs(name, "value_sources") == {"shop.main.customers.name"}
 
 
@@ -437,3 +444,102 @@ def test_deps_and_impact_entries_give_consistent_roles(analyzer):
         count_result, "row_set:shop.main.orders"
     )
     assert row_set_impact["impacted_fields"][0]["impact_types"] == ["value"]
+
+
+# ---------------------------------------------------------------------------
+# 回归：EXISTS 投影占位 / 标量 NULL / 空输入聚合（三类原因分开）
+#
+# 旧模型把 EXISTS 内部所有来源一股脑并进 control：只出现在 SELECT 列表里的
+# 列被误报为筛选条件；标量子查询变 NULL 的行集原因、以及无分组聚合的行集
+# 语义又都无处可放。以下用例锁定 value / control / existence 的严格分工。
+# ---------------------------------------------------------------------------
+
+
+def test_exists_projection_columns_are_placeholders(analyzer):
+    # EXISTS 的 SELECT 列表只是占位：改 amount/status 不改变保留行。
+    r = analyzer.analyze(
+        (ROOT / "sql" / "15_exists_projection_placeholder.sql").read_text(
+            encoding="utf-8"
+        )
+    )
+    name = _field(r, "customer_name")
+    for bucket in ("value_sources", "control_sources", "existence_sources"):
+        assert "shop.main.orders.amount" not in _refs(name, bucket)
+        assert "shop.main.orders.status" not in _refs(name, bucket)
+    assert "shop.main.orders.customer_id" in _refs(name, "control_sources")
+    assert "row_set:shop.main.orders" in _refs(name, "existence_sources")
+    assert "row_set:shop.main.orders" not in _refs(name, "control_sources")
+
+
+def test_not_exists_matches_existence_and_filter(analyzer):
+    r = analyzer.analyze(
+        (ROOT / "sql" / "16_not_exists.sql").read_text(encoding="utf-8")
+    )
+    name = _field(r, "customer_name")
+    assert "shop.main.orders.status" in _refs(name, "control_sources")
+    assert "row_set:shop.main.orders" in _refs(name, "existence_sources")
+    assert "row_set:shop.main.orders" not in _refs(name, "control_sources")
+
+
+def test_scalar_constant_with_predicate_traces_null_to_row_set(analyzer):
+    r = analyzer.analyze(
+        (ROOT / "sql" / "17_scalar_constant_with_predicate.sql").read_text(
+            encoding="utf-8"
+        )
+    )
+    flag = _field(r, "has_paid_order")
+    assert _refs(flag, "value_sources") == set()
+    assert "shop.main.orders.status" in _refs(flag, "control_sources")
+    assert "shop.main.orders.customer_id" in _refs(flag, "control_sources")
+    assert _refs(flag, "existence_sources") == {"row_set:shop.main.orders"}
+
+    deps = field_dependencies(r, "has_paid_order")
+    assert deps["existence_sources"] == ["row_set:shop.main.orders"]
+    impact = downstream_impact(r, "row_set:shop.main.orders")["impacted_fields"]
+    assert impact[0]["impact_types"] == ["existence"]
+
+
+def test_empty_input_aggregate_filter_does_not_leak_to_outer_field(analyzer):
+    # 无分组 COUNT 恒一行：内层 WHERE 只改变取值，不得扩散成外层固定标记的
+    # 行选择来源。
+    r = analyzer.analyze(
+        (ROOT / "sql" / "18_empty_input_aggregate.sql").read_text(
+            encoding="utf-8"
+        )
+    )
+    n = _field(r, "n")
+    assert _refs(n, "value_sources") == {"row_set:shop.main.orders"}
+    assert "shop.main.orders.status" in _refs(n, "control_sources")
+    assert "shop.main.orders.status" not in _refs(n, "value_sources")
+    marker = _field(r, "marker")
+    for bucket in ("value_sources", "control_sources", "existence_sources"):
+        assert _refs(marker, bucket) == set()
+
+
+def test_exists_over_constant_cardinality_has_no_sources(analyzer):
+    # EXISTS(SELECT COUNT(*) FROM orders) 恒为真，与 orders 是否有行无关，
+    # 因此不产生任何来源（不能把 COUNT 的行集标记当成存在性来源）。
+    r = analyzer.analyze(
+        "SELECT c.name AS customer_name FROM customers AS c "
+        "WHERE EXISTS (SELECT COUNT(*) FROM orders AS o)"
+    )
+    name = _field(r, "customer_name")
+    assert _refs(name, "value_sources") == {"shop.main.customers.name"}
+    assert _refs(name, "control_sources") == set()
+    assert _refs(name, "existence_sources") == set()
+
+
+def test_empty_input_aggregate_null_value_traces_row_set(analyzer):
+    # SUM/MIN/MAX 空输入返回 NULL（与标量子查询同一"行集为空"原因）；
+    # COUNT 空输入返回 0，行集只作为取值来源(value)，不重复进 existence。
+    sum_sql = "SELECT SUM(amount) AS s FROM orders WHERE status = 'PAID'"
+    s = _field(analyzer.analyze(sum_sql), "s")
+    assert _refs(s, "value_sources") == {"shop.main.orders.amount"}
+    assert "shop.main.orders.status" in _refs(s, "control_sources")
+    assert _refs(s, "existence_sources") == {"row_set:shop.main.orders"}
+
+    count_sql = "SELECT COUNT(*) AS n FROM orders WHERE status = 'PAID'"
+    n = _field(analyzer.analyze(count_sql), "n")
+    assert _refs(n, "value_sources") == {"row_set:shop.main.orders"}
+    assert "shop.main.orders.status" in _refs(n, "control_sources")
+    assert _refs(n, "existence_sources") == set()

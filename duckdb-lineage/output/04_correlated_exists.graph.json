@@ -54,7 +54,7 @@
     {
       "from": "row_set:shop.main.order_items",
       "to": "<top_query>.amount",
-      "type": "control",
+      "type": "existence",
       "paths": [
         [
           "where",
@@ -73,7 +73,7 @@
     {
       "from": "row_set:shop.main.order_items",
       "to": "<top_query>.customer_id",
-      "type": "control",
+      "type": "existence",
       "paths": [
         [
           "where",
@@ -92,7 +92,7 @@
     {
       "from": "row_set:shop.main.order_items",
       "to": "<top_query>.order_id",
-      "type": "control",
+      "type": "existence",
       "paths": [
         [
           "where",

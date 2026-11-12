@@ -140,6 +140,30 @@
       "status": "ok",
       "field_count": 2,
       "errors": []
+    },
+    {
+      "sql_file": "15_exists_projection_placeholder.sql",
+      "status": "ok",
+      "field_count": 2,
+      "errors": []
+    },
+    {
+      "sql_file": "16_not_exists.sql",
+      "status": "ok",
+      "field_count": 2,
+      "errors": []
+    },
+    {
+      "sql_file": "17_scalar_constant_with_predicate.sql",
+      "status": "ok",
+      "field_count": 3,
+      "errors": []
+    },
+    {
+      "sql_file": "18_empty_input_aggregate.sql",
+      "status": "ok",
+      "field_count": 2,
+      "errors": []
     }
   ]
 }

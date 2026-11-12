@@ -2,10 +2,14 @@
 
 断言类型：
   value                     value_sources 的 ref 集合必须精确相等
-  control_contains          control_sources 必须包含给定 ref
+  control_contains          control_sources 必须包含给定 ref（匹配/选择原因）
+  existence_contains        existence_sources 必须包含给定 ref（行集为空原因）
   value_row_sets            value 中的行集标记集合精确相等
+  existence_row_sets        existence 中的行集标记集合精确相等
   forbidden_value_contains  value_sources 不得包含给定 ref
   forbidden_control_contains  control_sources 不得包含给定 ref（角色混淆防线）
+  forbidden_existence_contains existence_sources 不得包含给定 ref
+  forbidden_any_contains    三个桶都不得包含给定 ref（占位投影不得成为原因）
   forbidden_value_prefix    value_sources 的 ref 不得有该前缀（防拼接假边）
   expected_error_code / expected_location  错误码与 [line, col] 定位
 
@@ -86,6 +90,7 @@ def check() -> int:
             field = actual[field_name]
             value = _refs(field, "value_sources")
             control = _refs(field, "control_sources")
+            existence = _refs(field, "existence_sources")
 
             if "value" in rules and value != set(rules["value"]):
                 failures.append(
@@ -97,12 +102,28 @@ def check() -> int:
                     failures.append(
                         f"{sql_name}.{field_name}: control 缺少 {ref}，实际 {sorted(control)}"
                     )
+            for ref in rules.get("existence_contains", []):
+                if ref not in existence:
+                    failures.append(
+                        f"{sql_name}.{field_name}: existence 缺少 {ref}，"
+                        f"实际 {sorted(existence)}"
+                    )
             if "value_row_sets" in rules:
                 row_sets = {r for r in value if r.startswith("row_set:")}
                 if row_sets != set(rules["value_row_sets"]):
                     failures.append(
                         f"{sql_name}.{field_name}: 行集标记期望 "
                         f"{sorted(rules['value_row_sets'])}，实际 {sorted(row_sets)}"
+                    )
+            if "existence_row_sets" in rules:
+                row_sets = {
+                    r for r in existence if r.startswith("row_set:")
+                }
+                if row_sets != set(rules["existence_row_sets"]):
+                    failures.append(
+                        f"{sql_name}.{field_name}: existence 行集标记期望 "
+                        f"{sorted(rules['existence_row_sets'])}，"
+                        f"实际 {sorted(row_sets)}"
                     )
             for ref in rules.get("forbidden_value_contains", []):
                 if ref in value:
@@ -114,6 +135,17 @@ def check() -> int:
                     failures.append(
                         f"{sql_name}.{field_name}: control 不应包含 {ref}"
                         "（value/control 角色混淆）"
+                    )
+            for ref in rules.get("forbidden_existence_contains", []):
+                if ref in existence:
+                    failures.append(
+                        f"{sql_name}.{field_name}: existence 不应包含 {ref}"
+                    )
+            for ref in rules.get("forbidden_any_contains", []):
+                if ref in value or ref in control or ref in existence:
+                    failures.append(
+                        f"{sql_name}.{field_name}: 任何来源都不应包含 {ref}"
+                        "（占位投影/无关列不得成为影响原因）"
                     )
             for prefix in rules.get("forbidden_value_prefix", []):
                 bad = [r for r in value if r.startswith(prefix)]
@@ -128,7 +160,7 @@ def check() -> int:
         for msg in failures:
             print(f"  [FAIL] {msg}")
         return 1
-    print("全部手工标注断言通过：value/control 分桶、行集标记、错误定位均符合预期")
+    print("全部手工标注断言通过：value/control/existence 分桶、行集标记、错误定位均符合预期")
     return 0
 
 

@@ -1,23 +1,33 @@
 #!/usr/bin/env bash
-# 一键验证：DuckDB 实际执行 -> 手工标注核对 -> pytest 单元测试 -> 确定性检查
+# 一键验证：
+#   1) DuckDB 实际执行样例
+#   2) 手工标注依赖集合核对
+#   3) pytest 单元测试
+#   4) 两个 DuckDB 因果复现脚本
+#   5) JSON 确定性检查（重复运行比对哈希）
 # 可在 `python -I` 隔离模式下运行（脚本自行补回 user site）。
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-echo "############ 1/4 DuckDB 实际执行样例 ############"
+echo "############ 1/5 DuckDB 实际执行样例 ############"
 python3 -I scripts/run_duckdb_validation.py
 
 echo
-echo "############ 2/4 手工标注依赖集合核对 ############"
+echo "############ 2/5 手工标注依赖集合核对 ############"
 python3 -I scripts/check_expected.py
 
 echo
-echo "############ 3/4 pytest 单元测试 ############"
+echo "############ 3/5 pytest 单元测试 ############"
 python3 -I scripts/run_pytest.py tests/ -q
 
 echo
-echo "############ 4/4 JSON 确定性检查（重复运行比对哈希）############"
+echo "############ 4/5 DuckDB 因果复现 ############"
+python3 -I repro/repro_row_existence.py
+python3 -I repro/repro_exists_scalar_aggregate.py
+
+echo
+echo "############ 5/5 JSON 确定性检查（重复运行比对哈希）############"
 # CLI 对 error/unsupported 样例按约定返回退出码 2（见 cli.py），这不是崩溃，
 # 其 JSON 载荷同样要求字节级确定；因此循环内容忍退出码 2，仅比对哈希。
 fail=0

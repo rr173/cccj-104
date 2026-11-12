@@ -9,7 +9,8 @@
 边类型：
 
 * ``value``：参与值计算；
-* ``control``：只影响存在性/选择/分组/窗口排序。
+* ``control``：只影响匹配/选择/分组/窗口排序；
+* ``existence``：只影响行集/子结果是否为空（``row_set:`` 标记）。
 
 所有列表按稳定键排序，保证同一 SQL 多次运行产出字节级一致的 JSON。
 """
@@ -35,6 +36,7 @@ def build_graph(result: LineageResult) -> dict[str, Any]:
         for bucket, edge_kind in (
             (field.value_sources, "value"),
             (field.control_sources, "control"),
+            (field.existence_sources, "existence"),
         ):
             for src in bucket:
                 src_kind = "row_set" if is_row_set_marker(src.ref) else "base_column"
@@ -97,6 +99,7 @@ def field_dependencies(
             "field": f"{field.relation}.{field.name}",
             "value_sources": _refs(field.value_sources),
             "control_sources": _refs(field.control_sources),
+            "existence_sources": _refs(field.existence_sources),
         }
     return {
         "field": field_name,
@@ -112,17 +115,24 @@ def downstream_impact(
     for field in result.fields:
         value_hits = _matching(field.value_sources, base_ref)
         control_hits = _matching(field.control_sources, base_ref)
-        if not value_hits and not control_hits:
+        existence_hits = _matching(field.existence_sources, base_ref)
+        if not value_hits and not control_hits and not existence_hits:
             continue
         impacted.append(
             {
                 "field": f"{field.relation}.{field.name}",
-                "impact_types": sorted(
-                    (["value"] if value_hits else [])
-                    + (["control"] if control_hits else [])
-                ),
+                "impact_types": [
+                    kind
+                    for kind, hits in (
+                        ("value", value_hits),
+                        ("control", control_hits),
+                        ("existence", existence_hits),
+                    )
+                    if hits
+                ],
                 "value_paths": value_hits,
                 "control_paths": control_hits,
+                "existence_paths": existence_hits,
             }
         )
     impacted.sort(key=lambda d: d["field"])

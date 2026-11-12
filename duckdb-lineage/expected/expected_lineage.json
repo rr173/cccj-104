@@ -3,16 +3,28 @@
     "expected_status": "ok",
     "fields": {
       "customer_id": {
-        "value": ["shop.main.customers.customer_id"],
-        "control_contains": ["shop.main.orders.status"]
+        "value": [
+          "shop.main.customers.customer_id"
+        ],
+        "control_contains": [
+          "shop.main.orders.status"
+        ]
       },
       "name": {
-        "value": ["shop.main.customers.name"],
-        "control_contains": ["shop.main.orders.status"]
+        "value": [
+          "shop.main.customers.name"
+        ],
+        "control_contains": [
+          "shop.main.orders.status"
+        ]
       },
       "amount": {
-        "value": ["shop.main.orders.amount"],
-        "control_contains": ["shop.main.orders.status"]
+        "value": [
+          "shop.main.orders.amount"
+        ],
+        "control_contains": [
+          "shop.main.orders.status"
+        ]
       }
     },
     "notes": "CTE orders 遮蔽基础表；外层 amount 仍重定基到基础列 shop.main.orders.amount；CTE 内 WHERE status 作为 control 穿透到外层字段"
@@ -21,18 +33,26 @@
     "expected_status": "ok",
     "fields": {
       "oid": {
-        "value": ["shop.main.order_items.order_id"],
-        "forbidden_value_prefix": ["d."]
+        "value": [
+          "shop.main.order_items.order_id"
+        ],
+        "forbidden_value_prefix": [
+          "d."
+        ]
       },
       "net_amount": {
         "value": [
           "shop.main.order_items.qty",
           "shop.main.order_items.unit_price"
         ],
-        "control_contains": ["shop.main.order_items.qty"]
+        "control_contains": [
+          "shop.main.order_items.qty"
+        ]
       },
       "product_name": {
-        "value": ["shop.main.products.product_name"]
+        "value": [
+          "shop.main.products.product_name"
+        ]
       }
     },
     "notes": "两层别名：d.oid 必须落到基础身份 order_items.order_id，禁止出现 d.oid 拼接边"
@@ -42,8 +62,12 @@
     "expected_field_count": 15,
     "fields": {
       "order_id": {
-        "value": ["shop.main.orders.order_id"],
-        "control_contains": ["shop.main.orders.order_date"]
+        "value": [
+          "shop.main.orders.order_id"
+        ],
+        "control_contains": [
+          "shop.main.orders.order_date"
+        ]
       }
     },
     "notes": "裸 * 展开 10 列(customers 5 + orders 5)，c.* 再展开 5 列，共 15 列"
@@ -52,17 +76,23 @@
     "expected_status": "ok",
     "fields": {
       "order_id": {
-        "value": ["shop.main.orders.order_id"],
+        "value": [
+          "shop.main.orders.order_id"
+        ],
         "control_contains": [
           "shop.main.order_items.order_id",
           "shop.main.order_items.qty",
-          "shop.main.orders.status",
-          "row_set:shop.main.order_items"
+          "shop.main.orders.status"
         ],
-        "forbidden_value_contains": ["shop.main.order_items"]
+        "forbidden_value_contains": [
+          "shop.main.order_items"
+        ],
+        "existence_row_sets": [
+          "row_set:shop.main.order_items"
+        ]
       }
     },
-    "notes": "相关 EXISTS 的相关列 oi.order_id=o.order_id 与 oi.qty 只进 control；order_items 任何列都不得出现在 value；内部行集标记同样作为 control 上带（删空 order_items 会改变外层保留行）"
+    "notes": "相关 EXISTS 的相关列 oi.order_id=o.order_id 与 oi.qty 属于匹配条件(control)；order_items 任何列都不得出现在 value；内部行集标记单独进 existence（删空 order_items 会让 EXISTS 变假，是行集为空原因，不是匹配过滤）"
   },
   "05_union_all.sql": {
     "expected_status": "ok",
@@ -72,7 +102,10 @@
           "shop.main.orders.order_id",
           "shop.main.order_items.item_id"
         ],
-        "control_contains": ["shop.main.orders.status", "shop.main.order_items.qty"]
+        "control_contains": [
+          "shop.main.orders.status",
+          "shop.main.order_items.qty"
+        ]
       },
       "amt": {
         "value": [
@@ -88,12 +121,20 @@
     "expected_status": "ok",
     "fields": {
       "customer_label": {
-        "value": ["shop.main.customers.name"],
-        "control_contains": ["shop.main.customers.tier"],
-        "forbidden_value_contains": ["shop.main.customers.tier"]
+        "value": [
+          "shop.main.customers.name"
+        ],
+        "control_contains": [
+          "shop.main.customers.tier"
+        ],
+        "forbidden_value_contains": [
+          "shop.main.customers.tier"
+        ]
       },
       "running_amount": {
-        "value": ["shop.main.orders.amount"],
+        "value": [
+          "shop.main.orders.amount"
+        ],
         "control_contains": [
           "shop.main.customers.city",
           "shop.main.orders.order_date"
@@ -125,7 +166,10 @@
   "07_ambiguous.sql": {
     "expected_status": "error",
     "expected_error_code": "ambiguous_column",
-    "expected_location": [5, 5],
+    "expected_location": [
+      5,
+      5
+    ],
     "notes": "未限定 customer_id 在 c/o 两个绑定同名 -> 歧义，必须给候选与行列号"
   },
   "08a_recursive_cte.sql": {
@@ -141,14 +185,19 @@
   "08c_parse_error.sql": {
     "expected_status": "unsupported",
     "expected_error_code": "parse_error",
-    "expected_location": [5, 14],
+    "expected_location": [
+      5,
+      14
+    ],
     "notes": "解析失败给行列定位"
   },
   "09_filter_only_column.sql": {
     "expected_status": "ok",
     "fields": {
       "customer_name": {
-        "value": ["shop.main.customers.name"],
+        "value": [
+          "shop.main.customers.name"
+        ],
         "control_contains": [
           "shop.main.customers.city",
           "shop.main.customers.tier"
@@ -181,7 +230,9 @@
     "expected_status": "ok",
     "fields": {
       "region_seq": {
-        "value_row_sets": ["row_set:hr.main.staff"],
+        "value_row_sets": [
+          "row_set:hr.main.staff"
+        ],
         "control_contains": [
           "hr.main.staff.region_id",
           "hr.main.staff.hire_date"
@@ -194,9 +245,15 @@
     "expected_status": "ok",
     "fields": {
       "paid_order_count": {
-        "value_row_sets": ["row_set:shop.main.orders"],
-        "control_contains": ["shop.main.orders.status"],
-        "forbidden_value_contains": ["shop.main.orders.status"]
+        "value_row_sets": [
+          "row_set:shop.main.orders"
+        ],
+        "control_contains": [
+          "shop.main.orders.status"
+        ],
+        "forbidden_value_contains": [
+          "shop.main.orders.status"
+        ]
       }
     },
     "notes": "CTE 内部 WHERE status 决定行数，外层 COUNT(*) 不引用任何内层列时 status 仍须作为 control 上带；行集标记只承担 value"
@@ -205,33 +262,136 @@
     "expected_status": "ok",
     "fields": {
       "customer_name": {
-        "value": ["shop.main.customers.name"],
-        "control_contains": ["shop.main.orders.status"]
+        "value": [
+          "shop.main.customers.name"
+        ],
+        "control_contains": [
+          "shop.main.orders.status"
+        ]
       },
       "max_paid_amount": {
-        "value": ["shop.main.orders.amount"],
+        "value": [
+          "shop.main.orders.amount"
+        ],
         "control_contains": [
           "shop.main.orders.status",
           "shop.main.orders.customer_id"
         ],
-        "forbidden_value_contains": ["shop.main.orders.status"],
-        "forbidden_control_contains": ["shop.main.orders.amount"]
+        "forbidden_value_contains": [
+          "shop.main.orders.status"
+        ],
+        "forbidden_control_contains": [
+          "shop.main.orders.amount"
+        ],
+        "existence_row_sets": [
+          "row_set:shop.main.orders"
+        ]
       }
     },
-    "notes": "连接后只取 customers.name 仍保留派生表 status 筛选(control)；标量子查询 MAX(amount) 的 amount 仅为 value、status 仅为 control，角色不混淆"
+    "notes": "连接后只取 customers.name 仍保留派生表 status 筛选(control)；标量子查询 MAX(amount) 的 amount 仅为 value、status 仅为 control；删掉最后一条匹配订单会让子查询结果从具体值变为 NULL，该行集为空原因记在 existence"
   },
   "14_exists_row_set.sql": {
     "expected_status": "ok",
     "fields": {
       "customer_name": {
-        "value": ["shop.main.customers.name"],
+        "value": [
+          "shop.main.customers.name"
+        ],
         "control_contains": [
-          "row_set:shop.main.orders",
-          "shop.main.orders.status",
-          "shop.main.orders.customer_id"
+          "shop.main.customers.customer_id",
+          "shop.main.orders.customer_id",
+          "shop.main.orders.status"
+        ],
+        "existence_contains": [
+          "row_set:shop.main.orders"
         ]
       }
     },
-    "notes": "内部只选常量的 EXISTS：删空 orders 会清空结果，orders 行集标记与内层筛选列必须作为 control 可追溯"
+    "notes": "内部只选常量的 EXISTS：删空 orders 会清空结果，orders 行集标记属于 existence（行集为空原因）；内层匹配列属于 control；两张表的任何列都不得出现在 value"
+  },
+  "15_exists_projection_placeholder.sql": {
+    "expected_status": "ok",
+    "fields": {
+      "customer_name": {
+        "value": [
+          "shop.main.customers.name"
+        ],
+        "control_contains": [
+          "shop.main.orders.customer_id",
+          "shop.main.customers.customer_id"
+        ],
+        "existence_row_sets": [
+          "row_set:shop.main.orders"
+        ],
+        "forbidden_any_contains": [
+          "shop.main.orders.amount",
+          "shop.main.orders.status"
+        ]
+      }
+    },
+    "notes": "EXISTS 的 SELECT 列表只是占位：amount/status 只出现在投影、不参与谓词，任何来源桶都不得包含；匹配列进 control，行集进 existence"
+  },
+  "16_not_exists.sql": {
+    "expected_status": "ok",
+    "fields": {
+      "customer_name": {
+        "value": [
+          "shop.main.customers.name"
+        ],
+        "control_contains": [
+          "shop.main.orders.status",
+          "shop.main.orders.customer_id"
+        ],
+        "existence_row_sets": [
+          "row_set:shop.main.orders"
+        ]
+      }
+    },
+    "notes": "NOT EXISTS 与 EXISTS 对称：删空表使条件翻转，行集为空属于 existence；内层匹配列属于 control"
+  },
+  "17_scalar_constant_with_predicate.sql": {
+    "expected_status": "ok",
+    "fields": {
+      "has_paid_order": {
+        "value": [],
+        "value_row_sets": [],
+        "control_contains": [
+          "shop.main.orders.status",
+          "shop.main.orders.customer_id",
+          "shop.main.customers.customer_id"
+        ],
+        "existence_row_sets": [
+          "row_set:shop.main.orders"
+        ],
+        "forbidden_value_contains": [
+          "shop.main.orders.amount"
+        ]
+      }
+    },
+    "notes": "只返回常量的标量子查询：没有匹配行时结果为 NULL；匹配条件进 control，orders 行集进 existence；常量不产生基础列 value"
+  },
+  "18_empty_input_aggregate.sql": {
+    "expected_status": "ok",
+    "fields": {
+      "n": {
+        "value_row_sets": [
+          "row_set:shop.main.orders"
+        ],
+        "control_contains": [
+          "shop.main.orders.status"
+        ],
+        "forbidden_value_contains": [
+          "shop.main.orders.status"
+        ]
+      },
+      "marker": {
+        "value": [],
+        "forbidden_any_contains": [
+          "shop.main.orders.status",
+          "shop.main.orders.amount"
+        ]
+      }
+    },
+    "notes": "无分组 COUNT 恒返回一行：内层 status 只改变取值(n 的 control)，不作为派生关系的行选择来源扩散到外层固定标记；行数变化由行集标记在 n 的 value 承担"
   }
 }
