@@ -215,6 +215,17 @@
           "this",
           "column",
           "status"
+        ],
+        [
+          "relation_filter",
+          "cte:orders",
+          "where",
+          "Where",
+          "this",
+          "EQ",
+          "this",
+          "column",
+          "status"
         ]
       ]
     },
@@ -236,6 +247,17 @@
           "this",
           "column",
           "status"
+        ],
+        [
+          "relation_filter",
+          "cte:orders",
+          "where",
+          "Where",
+          "this",
+          "EQ",
+          "this",
+          "column",
+          "status"
         ]
       ]
     },
@@ -250,6 +272,17 @@
           "this",
           "column",
           "customer_id",
+          "where",
+          "Where",
+          "this",
+          "EQ",
+          "this",
+          "column",
+          "status"
+        ],
+        [
+          "relation_filter",
+          "cte:orders",
           "where",
           "Where",
           "this",

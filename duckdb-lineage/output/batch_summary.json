@@ -122,6 +122,24 @@
       "status": "ok",
       "field_count": 3,
       "errors": []
+    },
+    {
+      "sql_file": "12_filtered_count.sql",
+      "status": "ok",
+      "field_count": 1,
+      "errors": []
+    },
+    {
+      "sql_file": "13_join_name_and_scalar_role.sql",
+      "status": "ok",
+      "field_count": 2,
+      "errors": []
+    },
+    {
+      "sql_file": "14_exists_row_set.sql",
+      "status": "ok",
+      "field_count": 2,
+      "errors": []
     }
   ]
 }

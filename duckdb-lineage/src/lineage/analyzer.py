@@ -8,6 +8,9 @@
 3. 为每个 SELECT 构造 :class:`Scope`，按 CTE 文本顺序分析 CTE（内层同名 CTE
    遮蔽外层及基础表），FROM/JOIN 建立绑定，子查询递归建子作用域；
 4. 投影表达式拆 value/control，WHERE/HAVING/JOIN ON/QUALIFY 全部归 control；
+   关系层谓词额外记入 ``row_filters``，随派生关系独立上带——即使外层不引用
+   任何内层列（COUNT(*)/固定标记/只取连接对侧列），"行能否进入结果"的约束
+   也不会丢；表达式级条件（如 CASE WHEN）不进 ``row_filters``，不污染相邻字段；
 5. UNION ALL 按位置合并分支。
 """
 
@@ -47,8 +50,16 @@ class RelationResult:
     """UNION 等非 SELECT 关系节点的分析结果（与 Scope 同构的最小接口）。"""
 
     output_fields: list[dict] = field(default_factory=list)
-    relation_sources: list[Source] = field(default_factory=list)
+    row_filters: list[Source] = field(default_factory=list)
     row_sets: list[Source] = field(default_factory=list)
+
+    def existence_sources(self) -> list[Source]:
+        out: list[Source] = list(self.row_filters)
+        for item in self.output_fields:
+            out.extend(item["value"])
+            out.extend(item["control"])
+        out.extend(self.row_sets)
+        return out
 
 
 class LineageAnalyzer:
@@ -213,6 +224,17 @@ class LineageAnalyzer:
         for join in node.args.get("joins") or []:
             self._bind_relation(join.this, scope)
 
+        # 派生关系的关系级筛选决定其输出行能否进入本层：即使本层投影一个
+        # 内层列都不引用（固定标记 / COUNT(*) / 仅做存在性连接），约束仍须
+        # 作为本层 row_filters 继续上带。基础表绑定没有 row_filters。
+        for alias in sorted(scope.bindings):
+            binding = scope.bindings[alias]
+            if isinstance(binding, DerivedBinding):
+                scope.row_filters.extend(
+                    Source(ref=s.ref, kind=s.kind, path=s.path)
+                    for s in binding.row_filters
+                )
+
         # 行集标记（COUNT(*) 透传）
         scope.row_sets = self._collect_row_sets(scope)
 
@@ -224,7 +246,10 @@ class LineageAnalyzer:
         # 投影
         self._analyze_projections(node, scope, analyzer)
 
-        # 关系层过滤条件 -> control
+        # 关系层过滤条件 -> control。这些谓词决定本 SELECT 每一行是否存在，
+        # 与外层最终选中了哪个输出列无关，因此单独记为 row_filters：
+        # 1) 分发给本层全部输出字段（任一字段的行都受同一谓词约束）；
+        # 2) 随 DerivedBinding 独立上带，即使外层一个内层列都不引用也不丢。
         control_paths: list[tuple[exp.Expression, str]] = []
         if node.args.get("where") is not None:
             control_paths.append((node.args["where"], "where"))
@@ -240,21 +265,14 @@ class LineageAnalyzer:
             sources = analyzer.analyze(cond, (label,))
             # 关系层谓词整体是"选择条件"：子表达式无论默认桶归属，统一归 control
             controlled = ExpressionAnalyzer._as_control(sources)
-            scope.relation_sources.extend(controlled.control)
+            scope.row_filters.extend(controlled.control)
 
-        # 关系层条件决定本 SELECT 每一行是否存在/被选中，因此把 control
-        # 来源分发给全部输出字段；派生表/CTE 的内部过滤会随重定基继续上带。
-        relation_control = list(scope.relation_sources)
+        relation_control = list(scope.row_filters)
         for item in scope.output_fields:
             item["control"].extend(
                 Source(ref=s.ref, kind=s.kind, path=s.path)
                 for s in relation_control
             )
-
-        # 汇总 relation_sources（含投影全部来源，供 EXISTS 整体上报）
-        for item in scope.output_fields:
-            scope.relation_sources.extend(item["value"])
-            scope.relation_sources.extend(item["control"])
 
         return scope
 
@@ -282,7 +300,7 @@ class LineageAnalyzer:
             )
         return RelationResult(
             output_fields=merged,
-            relation_sources=left.relation_sources + right.relation_sources,
+            row_filters=left.row_filters + right.row_filters,
             row_sets=left.row_sets + right.row_sets,
         )
 
@@ -310,6 +328,14 @@ class LineageAnalyzer:
             column_names=names,
             inner_fields=inner_fields,
             row_sets=list(body_scope.row_sets),
+            row_filters=[
+                Source(
+                    ref=s.ref,
+                    kind=s.kind,
+                    path=("relation_filter", f"cte:{name}") + s.path,
+                )
+                for s in body_scope.row_filters
+            ],
         )
         # 同名 CTE 遮蔽外层 CTE / 基础表：直接放在当前作用域，解析时内层优先
         enclosing.ctes[name] = binding
@@ -360,6 +386,14 @@ class LineageAnalyzer:
                 column_names=names,
                 inner_fields=inner_fields,
                 row_sets=list(inner.row_sets),
+                row_filters=[
+                    Source(
+                        ref=s.ref,
+                        kind=s.kind,
+                        path=("relation_filter", f"derived:{alias}") + s.path,
+                    )
+                    for s in inner.row_filters
+                ],
             )
         else:
             raise LineageUnsupported(

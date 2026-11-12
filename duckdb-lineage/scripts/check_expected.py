@@ -5,6 +5,7 @@
   control_contains          control_sources 必须包含给定 ref
   value_row_sets            value 中的行集标记集合精确相等
   forbidden_value_contains  value_sources 不得包含给定 ref
+  forbidden_control_contains  control_sources 不得包含给定 ref（角色混淆防线）
   forbidden_value_prefix    value_sources 的 ref 不得有该前缀（防拼接假边）
   expected_error_code / expected_location  错误码与 [line, col] 定位
 
@@ -107,6 +108,12 @@ def check() -> int:
                 if ref in value:
                     failures.append(
                         f"{sql_name}.{field_name}: value 不应包含 {ref}"
+                    )
+            for ref in rules.get("forbidden_control_contains", []):
+                if ref in control:
+                    failures.append(
+                        f"{sql_name}.{field_name}: control 不应包含 {ref}"
+                        "（value/control 角色混淆）"
                     )
             for prefix in rules.get("forbidden_value_prefix", []):
                 bad = [r for r in value if r.startswith(prefix)]

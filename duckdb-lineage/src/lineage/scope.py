@@ -53,6 +53,9 @@ class DerivedBinding:
 
     ``inner_fields`` 记录派生关系每个输出列名 -> 该列内部已算出的来源集合。
     解析外层引用时，把内层来源的路径前置外层访问路径，完成重定基。
+
+    ``row_filters`` 是关系级筛选（WHERE/JOIN ON/HAVING/QUALIFY）的来源：
+    它们决定派生关系的 *行能否存在*，即使外层一列都不引用也不能丢。
     """
 
     alias: str
@@ -61,6 +64,8 @@ class DerivedBinding:
     inner_fields: dict[str, dict[str, list[Source]]]
     # 派生关系内部可见的行集标记（供 COUNT(*) 跨层透传）
     row_sets: list[Source] = field(default_factory=list)
+    # 关系级筛选来源（决定本关系行存在性，独立于外层选中了哪些列）
+    row_filters: list[Source] = field(default_factory=list)
 
     @property
     def names(self) -> list[str]:
@@ -113,11 +118,26 @@ class Scope:
     named_windows: dict[str, exp.Window] = field(default_factory=dict)
     # 本 SELECT 的输出字段（分析完成后填充），供外层派生绑定/子查询重定基
     output_fields: list[dict[str, Any]] = field(default_factory=list)
-    # 本 SELECT 关系层面的全部来源（WHERE/JOIN ON/HAVING/QUALIFY + 投影），
-    # 供 EXISTS 整体作为 control 上报
-    relation_sources: list[Source] = field(default_factory=list)
+    # 关系层筛选（WHERE/JOIN ON/HAVING/QUALIFY）的全部来源，决定本 SELECT
+    # 每一行是否存在/被选中；与外层最终引用了哪个输出列无关，派生关系据此
+    # 把"记录能否进入结果"的约束独立上带
+    row_filters: list[Source] = field(default_factory=list)
     # 本层可见的行集标记（COUNT(*) 透传用）
     row_sets: list[Source] = field(default_factory=list)
+
+    def existence_sources(self) -> list[Source]:
+        """EXISTS/IN 子查询整体作为存在性判断时上报的全部来源。
+
+        包含三类：关系级筛选、每个输出字段的值/控制来源，以及 FROM/JOIN
+        引入的行集标记。内部只选常量（``SELECT 1``）时，字段来源为空，
+        但只要 FROM 了基础表，行集标记仍能表达"该表是否非空"对结果的影响。
+        """
+        out: list[Source] = list(self.row_filters)
+        for item in self.output_fields:
+            out.extend(item["value"])
+            out.extend(item["control"])
+        out.extend(self.row_sets)
+        return out
 
     # ---- 关系名解析（CTE 遮蔽基础表的关键） ----
 

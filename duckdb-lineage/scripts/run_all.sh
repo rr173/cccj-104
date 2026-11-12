@@ -18,10 +18,12 @@ python3 -I scripts/run_pytest.py tests/ -q
 
 echo
 echo "############ 4/4 JSON 确定性检查（重复运行比对哈希）############"
+# CLI 对 error/unsupported 样例按约定返回退出码 2（见 cli.py），这不是崩溃，
+# 其 JSON 载荷同样要求字节级确定；因此循环内容忍退出码 2，仅比对哈希。
 fail=0
 for f in sql/*.sql; do
-  h1=$(python3 -I src/lineage/cli.py graph --catalog catalog/catalog.json --sql "$f" 2>/dev/null | md5sum | cut -d' ' -f1)
-  h2=$(python3 -I src/lineage/cli.py graph --catalog catalog/catalog.json --sql "$f" 2>/dev/null | md5sum | cut -d' ' -f1)
+  h1=$( { python3 -I src/lineage/cli.py graph --catalog catalog/catalog.json --sql "$f" 2>/dev/null || true; } | md5sum | cut -d' ' -f1)
+  h2=$( { python3 -I src/lineage/cli.py graph --catalog catalog/catalog.json --sql "$f" 2>/dev/null || true; } | md5sum | cut -d' ' -f1)
   if [ "$h1" != "$h2" ]; then
     echo "  [FAIL] $(basename "$f") 两次输出不一致"
     fail=1

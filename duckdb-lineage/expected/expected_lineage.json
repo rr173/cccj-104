@@ -56,12 +56,13 @@
         "control_contains": [
           "shop.main.order_items.order_id",
           "shop.main.order_items.qty",
-          "shop.main.orders.status"
+          "shop.main.orders.status",
+          "row_set:shop.main.order_items"
         ],
         "forbidden_value_contains": ["shop.main.order_items"]
       }
     },
-    "notes": "相关 EXISTS 的相关列 oi.order_id=o.order_id 与 oi.qty 只进 control；order_items 任何列都不得出现在 value"
+    "notes": "相关 EXISTS 的相关列 oi.order_id=o.order_id 与 oi.qty 只进 control；order_items 任何列都不得出现在 value；内部行集标记同样作为 control 上带（删空 order_items 会改变外层保留行）"
   },
   "05_union_all.sql": {
     "expected_status": "ok",
@@ -188,5 +189,49 @@
       }
     },
     "notes": "命名窗口 WINDOW w AS (...) 的 PARTITION/ORDER control 可追溯；跨 catalog 表名解析"
+  },
+  "12_filtered_count.sql": {
+    "expected_status": "ok",
+    "fields": {
+      "paid_order_count": {
+        "value_row_sets": ["row_set:shop.main.orders"],
+        "control_contains": ["shop.main.orders.status"],
+        "forbidden_value_contains": ["shop.main.orders.status"]
+      }
+    },
+    "notes": "CTE 内部 WHERE status 决定行数，外层 COUNT(*) 不引用任何内层列时 status 仍须作为 control 上带；行集标记只承担 value"
+  },
+  "13_join_name_and_scalar_role.sql": {
+    "expected_status": "ok",
+    "fields": {
+      "customer_name": {
+        "value": ["shop.main.customers.name"],
+        "control_contains": ["shop.main.orders.status"]
+      },
+      "max_paid_amount": {
+        "value": ["shop.main.orders.amount"],
+        "control_contains": [
+          "shop.main.orders.status",
+          "shop.main.orders.customer_id"
+        ],
+        "forbidden_value_contains": ["shop.main.orders.status"],
+        "forbidden_control_contains": ["shop.main.orders.amount"]
+      }
+    },
+    "notes": "连接后只取 customers.name 仍保留派生表 status 筛选(control)；标量子查询 MAX(amount) 的 amount 仅为 value、status 仅为 control，角色不混淆"
+  },
+  "14_exists_row_set.sql": {
+    "expected_status": "ok",
+    "fields": {
+      "customer_name": {
+        "value": ["shop.main.customers.name"],
+        "control_contains": [
+          "row_set:shop.main.orders",
+          "shop.main.orders.status",
+          "shop.main.orders.customer_id"
+        ]
+      }
+    },
+    "notes": "内部只选常量的 EXISTS：删空 orders 会清空结果，orders 行集标记与内层筛选列必须作为 control 可追溯"
   }
 }

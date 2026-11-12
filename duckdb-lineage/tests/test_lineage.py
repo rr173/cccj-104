@@ -75,6 +75,9 @@ def test_correlated_exists_only_control(analyzer):
         control = _refs(field, "control_sources")
         assert "shop.main.order_items.qty" in control
         assert "shop.main.order_items.order_id" in control
+        # EXISTS 内部 FROM 的行集也必须作为 control（删空表会改变外层结果）
+        assert "row_set:shop.main.order_items" in control
+        assert "row_set:shop.main.order_items" not in value
 
 
 def test_union_all_positional_merge(analyzer):
@@ -210,3 +213,227 @@ def test_lateral_unsupported(analyzer):
 def test_multi_statement_unsupported(analyzer):
     result = analyzer.analyze("SELECT 1; SELECT 2")
     assert result.status == "unsupported"
+
+
+# ---------------------------------------------------------------------------
+# 回归：记录能否进入结果（行存在性）链路的血缘
+#
+# 旧实现把派生关系内部的筛选约束绑死在"被外层选中的列"上：外层不引用任何
+# 内层列（COUNT(*)/固定标记/只取连接侧姓名）时，WHERE 的 control 依赖丢失。
+# 以下用例沿 CTE -> 匿名子查询 -> 连接/计数消费 的链路逐层锁定。
+# ---------------------------------------------------------------------------
+
+
+def test_count_over_filtered_derived_keeps_filter_control(analyzer):
+    # 改 status 会改变 COUNT(*) 的条数；status 必须作为 control 可追溯，
+    # 无论计数输入来自匿名子查询还是命名 CTE。
+    sql = """
+        SELECT COUNT(*) AS n
+        FROM (SELECT order_id FROM orders WHERE status = 'PAID') AS t
+    """
+    result = analyzer.analyze(sql)
+    n = _field(result, "n")
+    assert _refs(n, "value_sources") == {"row_set:shop.main.orders"}
+    assert "shop.main.orders.status" in _refs(n, "control_sources")
+
+    cte_sql = """
+        WITH paid_orders AS (
+            SELECT order_id FROM orders WHERE status = 'PAID'
+        )
+        SELECT COUNT(*) AS n FROM paid_orders
+    """
+    cte_result = analyzer.analyze(cte_sql)
+    cte_n = _field(cte_result, "n")
+    assert "shop.main.orders.status" in _refs(cte_n, "control_sources")
+    assert _refs(cte_n, "value_sources") == {"row_set:shop.main.orders"}
+
+
+def test_constant_marker_over_filtered_derived_keeps_filter(analyzer):
+    # 外层只输出固定标记、不取内层任何一列，内部筛选仍不能丢。
+    sql = """
+        SELECT 'flag' AS marker
+        FROM (SELECT 1 AS x FROM orders WHERE status = 'PAID') AS t
+    """
+    result = analyzer.analyze(sql)
+    marker = _field(result, "marker")
+    assert _refs(marker, "value_sources") == set()
+    assert "shop.main.orders.status" in _refs(marker, "control_sources")
+
+
+def test_join_consuming_only_other_side_keeps_filter(analyzer):
+    # 连接后只取 customers.name，派生订单表的付款筛选仍决定哪些客户行保留。
+    sql = """
+        SELECT c.name AS customer_name
+        FROM customers AS c
+        JOIN (
+            SELECT customer_id FROM orders WHERE status = 'PAID'
+        ) AS o ON o.customer_id = c.customer_id
+    """
+    result = analyzer.analyze(sql)
+    name = _field(result, "customer_name")
+    assert _refs(name, "value_sources") == {"shop.main.customers.name"}
+    assert "shop.main.orders.status" in _refs(name, "control_sources")
+
+    # 即便外层完全不引用派生表任何列（恒真连接），约束也必须保留
+    sql_no_col = """
+        SELECT c.name AS customer_name
+        FROM customers AS c
+        JOIN (
+            SELECT 1 AS x FROM orders WHERE status = 'PAID'
+        ) AS o ON 1 = 1
+    """
+    no_col = analyzer.analyze(sql_no_col)
+    name2 = _field(no_col, "customer_name")
+    assert "shop.main.orders.status" in _refs(name2, "control_sources")
+
+
+def test_row_filter_survives_multi_layer_nesting(analyzer):
+    # 三层嵌套：最内层 WHERE status，最外层只输出常量/做 COUNT(*)。
+    marker_sql = """
+        SELECT 'flag' AS marker FROM (
+            SELECT * FROM (
+                SELECT order_id FROM orders WHERE status = 'PAID'
+            ) AS a
+        ) AS b
+    """
+    marker = _field(analyzer.analyze(marker_sql), "marker")
+    assert "shop.main.orders.status" in _refs(marker, "control_sources")
+
+    count_sql = """
+        SELECT COUNT(*) AS n FROM (
+            SELECT * FROM (
+                SELECT order_id FROM orders WHERE status = 'PAID'
+            ) AS a
+        ) AS b
+    """
+    n = _field(analyzer.analyze(count_sql), "n")
+    assert "shop.main.orders.status" in _refs(n, "control_sources")
+    assert _refs(n, "value_sources") == {"row_set:shop.main.orders"}
+
+
+def test_exists_constant_select_traces_base_row_set(analyzer):
+    # 内部只选常量、仅凭 orders 是否非空决定客户记录是否保留：
+    # 删空 orders 后结果消失，因此 orders 行集必须作为 control 出现。
+    sql = """
+        SELECT c.name AS customer_name
+        FROM customers AS c
+        WHERE EXISTS (SELECT 1 FROM orders AS o)
+    """
+    result = analyzer.analyze(sql)
+    name = _field(result, "customer_name")
+    assert "row_set:shop.main.orders" in _refs(name, "control_sources")
+    assert "row_set:shop.main.orders" not in _refs(name, "value_sources")
+
+    # 相关 EXISTS：内层 WHERE 的列与行集都应可追溯
+    correlated = """
+        SELECT c.name AS customer_name
+        FROM customers AS c
+        WHERE EXISTS (
+            SELECT 1 FROM orders AS o
+            WHERE o.customer_id = c.customer_id AND o.status = 'PAID'
+        )
+    """
+    corr = _field(analyzer.analyze(correlated), "customer_name")
+    control = _refs(corr, "control_sources")
+    assert "row_set:shop.main.orders" in control
+    assert "shop.main.orders.status" in control
+
+
+def test_scalar_subquery_preserves_value_control_roles(analyzer):
+    # 嵌套计算按付款状态取最大金额：amount 是取值来源(value)，
+    # status/customer_id 只做筛选(control)，角色不得互换或混桶。
+    sql = """
+        SELECT (
+            SELECT MAX(o.amount)
+            FROM orders AS o
+            WHERE o.customer_id = c.customer_id AND o.status = 'PAID'
+        ) AS max_paid
+        FROM customers AS c
+    """
+    result = analyzer.analyze(sql)
+    max_paid = _field(result, "max_paid")
+    assert _refs(max_paid, "value_sources") == {"shop.main.orders.amount"}
+    control = _refs(max_paid, "control_sources")
+    assert "shop.main.orders.status" in control
+    assert "shop.main.orders.customer_id" in control
+    # 旧缺陷：amount 被塞进筛选来源、status 被算进取值来源
+    assert "shop.main.orders.amount" not in control
+    assert "shop.main.orders.status" not in _refs(max_paid, "value_sources")
+
+
+def test_branch_local_condition_does_not_leak_to_sibling_field(analyzer):
+    # 反"汇总所有列来源"糊法：某个金额分支的条件只约束该金额，
+    # 不能变成旁边固定标记的依赖。
+    sql = """
+        SELECT
+            CASE WHEN status = 'PAID' THEN amount ELSE 0 END AS paid_amount,
+            'FIXED' AS marker
+        FROM orders
+    """
+    result = analyzer.analyze(sql)
+    paid_amount = _field(result, "paid_amount")
+    assert "shop.main.orders.status" in _refs(paid_amount, "control_sources")
+    marker = _field(result, "marker")
+    assert _refs(marker, "value_sources") == set()
+    assert _refs(marker, "control_sources") == set()
+
+    # 关系级筛选仍应约束同层全部字段（与表达式内 CASE 条件的局部性区分）
+    relation_sql = """
+        SELECT 'FIXED' AS marker
+        FROM orders
+        WHERE status = 'PAID'
+    """
+    rel_marker = _field(analyzer.analyze(relation_sql), "marker")
+    assert "shop.main.orders.status" in _refs(rel_marker, "control_sources")
+
+
+def test_in_subquery_filter_and_row_set_are_control(analyzer):
+    sql = """
+        SELECT c.name AS customer_name
+        FROM customers AS c
+        WHERE c.customer_id IN (
+            SELECT customer_id FROM orders WHERE status = 'PAID'
+        )
+    """
+    result = analyzer.analyze(sql)
+    name = _field(result, "customer_name")
+    control = _refs(name, "control_sources")
+    assert "shop.main.orders.status" in control
+    assert "row_set:shop.main.orders" in control
+    assert _refs(name, "value_sources") == {"shop.main.customers.name"}
+
+
+def test_deps_and_impact_entries_give_consistent_roles(analyzer):
+    # deps（查询依赖）与 impact（展示影响类型）两个入口对同一来源必须一致。
+    sql = """
+        SELECT (
+            SELECT MAX(o.amount)
+            FROM orders AS o
+            WHERE o.status = 'PAID'
+        ) AS max_paid
+        FROM customers AS c
+    """
+    result = analyzer.analyze(sql)
+    deps = field_dependencies(result, "max_paid")
+    assert deps["value_sources"] == ["shop.main.orders.amount"]
+    assert "shop.main.orders.status" in deps["control_sources"]
+
+    amount_impact = downstream_impact(result, "shop.main.orders.amount")
+    assert amount_impact["impacted_fields"][0]["impact_types"] == ["value"]
+    status_impact = downstream_impact(result, "shop.main.orders.status")
+    assert status_impact["impacted_fields"][0]["impact_types"] == ["control"]
+
+    # 计数场景：行集=value，筛选列=control，impact 入口同样可解释
+    count_sql = """
+        SELECT COUNT(*) AS n
+        FROM (SELECT order_id FROM orders WHERE status = 'PAID') AS t
+    """
+    count_result = analyzer.analyze(count_sql)
+    status_on_count = downstream_impact(
+        count_result, "shop.main.orders.status"
+    )
+    assert status_on_count["impacted_fields"][0]["impact_types"] == ["control"]
+    row_set_impact = downstream_impact(
+        count_result, "row_set:shop.main.orders"
+    )
+    assert row_set_impact["impacted_fields"][0]["impact_types"] == ["value"]

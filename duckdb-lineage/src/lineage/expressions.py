@@ -11,8 +11,11 @@
 * 窗口函数的参数 -> value；PARTITION BY / ORDER BY -> control。
 * COUNT(*) / COUNT(1) 不伪造全列依赖，记为基础关系的 *行集标记*
   （``row_set:<fq_table>``）；无参 ROW_NUMBER/RANK 同理。
-* EXISTS / NOT EXISTS 内部全部来源记为 control（它只决定外层行是否存在）。
-* 标量子查询的值来源会向上重定基；IN (subquery) 两侧记 control。
+* EXISTS / NOT EXISTS / IN 子查询内部全部来源记为 control（只决定外层行是否
+  存在）；内部只选常量时，FROM 关系的行集标记仍作为 control 上带，保证
+  "删空基础表 -> 外层结果变化"这条因果可追溯。
+* 标量子查询严格沿用内层字段的 value/control 角色重定基，不把筛选里的取值列
+  改判为 control，也不把过滤列提升为 value。
 """
 
 from __future__ import annotations
@@ -163,7 +166,10 @@ class ExpressionAnalyzer:
         if sub_scope is None:  # pragma: no cover - 构造期保证已建
             raise LineageUnsupported("EXISTS 子查询作用域未初始化")
         out = ExprSources()
-        for src in sub_scope.relation_sources:
+        # EXISTS 只做存在性判断：内部全部来源（含仅选常量时的基础表行集标记）
+        # 统一归 control。行集标记保证"内部只选常量、仅凭表是否非空决定保留"
+        # 的场景也能追到基础行集。
+        for src in sub_scope.existence_sources():
             out.control.append(
                 Source(
                     ref=src.ref,
@@ -180,16 +186,19 @@ class ExpressionAnalyzer:
         if sub_scope is None:  # pragma: no cover
             raise LineageUnsupported("标量子查询作用域未初始化")
         out = ExprSources()
-        # 标量子查询只允许单列；其字段来源整体重定基为 value
+        # 标量子查询只允许单列。严格沿用内层字段的角色分桶：
+        # 内层 value -> 外层 value（取值来源），内层 control -> 外层 control
+        # （筛选/选择来源）。不得把内层过滤里的取值列（如 MAX 的 amount）
+        # 重新打成 control，也不得把过滤列（如 status）提升为 value。
         for field_ in sub_scope.output_fields:
-            for src in field_["value"] + field_["control"]:
+            for src in field_["value"]:
                 out.value.append(
                     Source(ref=src.ref, kind=src.kind, path=path + ("scalar_subquery",) + src.path)
                 )
-        for src in sub_scope.relation_sources:
-            out.control.append(
-                Source(ref=src.ref, kind=src.kind, path=path + ("scalar_subquery",) + src.path)
-            )
+            for src in field_["control"]:
+                out.control.append(
+                    Source(ref=src.ref, kind=src.kind, path=path + ("scalar_subquery",) + src.path)
+                )
         return out
 
     def _in(self, node: exp.In, path: tuple[str, ...]) -> ExprSources:
@@ -200,32 +209,37 @@ class ExpressionAnalyzer:
                 self._visit(node.this, path + ("in", "left"))
             )
         )
-        for j, candidate in enumerate(node.expressions):
+        # sqlglot 版本差异：IN 子查询可能挂在 query 参数，也可能出现在
+        # expressions 列表中；两种形态都覆盖，并按节点 id 去重防止重复计入。
+        candidates: list[tuple[str, exp.Expression]] = [
+            ("query", node.args.get("query"))
+        ]
+        candidates.extend(
+            (f"values[{j}]", cand) for j, cand in enumerate(node.expressions)
+        )
+        seen: set[int] = set()
+        for label, candidate in candidates:
+            if candidate is None or id(candidate) in seen:
+                continue
+            seen.add(id(candidate))
             if isinstance(candidate, exp.Subquery):
                 sub_scope = self.scope.child_scopes.get(id(candidate.this))
                 if sub_scope is None:  # pragma: no cover
                     raise LineageUnsupported("IN 子查询作用域未初始化")
-                for field_ in sub_scope.output_fields:
-                    for src in field_["value"] + field_["control"]:
-                        out.control.append(
-                            Source(
-                                ref=src.ref,
-                                kind=src.kind,
-                                path=path + ("in", f"subquery[{j}]") + src.path,
-                            )
-                        )
-                for src in sub_scope.relation_sources:
+                # IN 子查询整体是选择条件：字段来源与行集标记全部归 control，
+                # 行集标记保证内部只选常量时仍可追溯基础行集的存在性影响。
+                for src in sub_scope.existence_sources():
                     out.control.append(
                         Source(
                             ref=src.ref,
                             kind=src.kind,
-                            path=path + ("in", f"subquery[{j}]") + src.path,
+                            path=path + ("in", label) + src.path,
                         )
                     )
-            else:
+            elif isinstance(candidate, exp.Expression):
                 out.extend(
                     self._as_control(
-                        self._visit(candidate, path + ("in", f"values[{j}]"))
+                        self._visit(candidate, path + ("in", label))
                     )
                 )
         return out

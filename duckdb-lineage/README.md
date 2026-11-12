@@ -17,8 +17,9 @@ JSON 血缘图，并把每个输出字段的依赖严格区分为：
 ```
 duckdb-lineage/
 ├── catalog/catalog.json          # 表结构目录（catalog/schema/table/column）
-├── sql/                          # 11 个可执行样例（01~11）
+├── sql/                          # 14 个可执行样例（01~14）
 ├── expected/expected_lineage.json# 手工标注的期望依赖集合
+├── repro/                        # 缺陷复现 + 修复后断言（DuckDB 因果验证）
 ├── src/lineage/                  # 抽取器源码
 │   ├── analyzer.py               # 主编排：解析/前置检查/作用域/UNION 合并
 │   ├── scope.py                  # 作用域链、CTE 遮蔽、相关绑定、歧义诊断
@@ -26,7 +27,7 @@ duckdb-lineage/
 │   ├── positions.py              # token 行列定位
 │   ├── catalog.py / model.py / graph.py / errors.py / cli.py
 ├── scripts/                      # DuckDB 执行、期望核对、pytest、一键验证
-├── tests/test_lineage.py         # 17 个 pytest 单元测试
+├── tests/test_lineage.py         # 26 个 pytest 单元测试
 └── docs/dialect_and_errors.md    # 方言范围与错误定位说明
 ```
 
@@ -88,7 +89,7 @@ bash scripts/run_all.sh
    插入确定性数据，真实执行全部受支持样例（递归 CTE/动态 SQL/歧义列单独说明）。
 2. **核对手工标注**：`scripts/check_expected.py` 把抽取结果与
    `expected/expected_lineage.json` 的人工依赖集合逐项断言。
-3. `scripts/run_pytest.py` 跑 17 个单元测试；并对每个 SQL 重复运行比对 MD5，
+3. `scripts/run_pytest.py` 跑 26 个单元测试；并对每个 SQL 重复运行比对 MD5，
    证明 JSON 输出字节级确定。
 
 ## 样例覆盖矩阵
@@ -106,6 +107,19 @@ bash scripts/run_all.sh
 | 09_filter_only | **仅筛选不参与值计算** 的列，证明两类依赖可分 |
 | 10_having_derived | HAVING 引用派生列，递归到基础身份 |
 | 11_named_window | 命名窗口 WINDOW 子句 + 跨 catalog.schema 限定表名 |
+| 12_filtered_count | 筛选后的 CTE 被外层 COUNT(*) 消费：不引用内层列，status 仍为 control |
+| 13_join_name_and_scalar_role | 连接只取客户姓名仍保留内层筛选；标量子查询 amount=value/status=control 不串桶 |
+| 14_exists_row_set | 只选常量的 EXISTS：删空基础表的影响经行集标记追到 control |
+
+### 行存在性缺陷复现
+
+`repro/repro_row_existence.py` 先用 DuckDB 做因果复现（只改 `status` 计数条数
+变化、删空 `orders` 后 EXISTS 结果清空），再断言修复后的血缘能解释同一条因果链，
+并含"分支局部条件不污染相邻固定标记"的负向断言：
+
+```bash
+python3 -I repro/repro_row_existence.py
+```
 
 方言边界、unsupported 清单与错误定位原理见
 [`docs/dialect_and_errors.md`](docs/dialect_and_errors.md)。

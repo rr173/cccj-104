@@ -22,6 +22,10 @@
       "name": "order_id"
     },
     {
+      "id": "row_set:shop.main.order_items",
+      "kind": "row_set"
+    },
+    {
       "id": "shop.main.order_items.order_id",
       "kind": "base_column"
     },
@@ -47,6 +51,63 @@
     }
   ],
   "edges": [
+    {
+      "from": "row_set:shop.main.order_items",
+      "to": "<top_query>.amount",
+      "type": "control",
+      "paths": [
+        [
+          "where",
+          "Where",
+          "this",
+          "func",
+          "AND",
+          "And",
+          "expression",
+          "exists",
+          "from",
+          "alias:oi"
+        ]
+      ]
+    },
+    {
+      "from": "row_set:shop.main.order_items",
+      "to": "<top_query>.customer_id",
+      "type": "control",
+      "paths": [
+        [
+          "where",
+          "Where",
+          "this",
+          "func",
+          "AND",
+          "And",
+          "expression",
+          "exists",
+          "from",
+          "alias:oi"
+        ]
+      ]
+    },
+    {
+      "from": "row_set:shop.main.order_items",
+      "to": "<top_query>.order_id",
+      "type": "control",
+      "paths": [
+        [
+          "where",
+          "Where",
+          "this",
+          "func",
+          "AND",
+          "And",
+          "expression",
+          "exists",
+          "from",
+          "alias:oi"
+        ]
+      ]
+    },
     {
       "from": "shop.main.order_items.order_id",
       "to": "<top_query>.amount",

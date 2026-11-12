@@ -54,6 +54,32 @@
 `sql/09_filter_only_column.sql` 是反证用例：`city`/`tier` 只在 WHERE 出现，
 因此只进 control，证明两类依赖确实可分。
 
+### 行存在性约束的独立上带（row_filters）
+
+关系层谓词（`WHERE`/`JOIN ON`/`HAVING`/`QUALIFY`）决定的是 **本关系的行能否
+存在**，与外层最终引用了哪个输出列无关。因此派生表/CTE 的这类来源单独记为
+`row_filters` 并随绑定上带，而不是绑死在被选中的列上：
+
+* 外层 `COUNT(*)`、输出固定常量标记、或连接后只取对侧列（一个内层列都不引用）
+  时，内层筛选仍出现在外层字段的 `control_sources`（见
+  `sql/12_filtered_count.sql`、`sql/13_join_name_and_scalar_role.sql`）；
+* 约束可穿透任意层嵌套，逐层前置 `relation_filter` 路径，不是单层补丁；
+* 表达式内部的局部条件不享受这条规则：`CASE WHEN status=... THEN amount` 中的
+  `status` 只约束该字段本身，不会泄漏到同层相邻的固定标记字段。关系层 WHERE
+  与表达式级 CASE 条件据此严格区分，不做"汇总所有列来源"的近似。
+
+### EXISTS / IN 与行集标记
+
+`EXISTS`/`IN (subquery)` 只做存在性判断，内部来源整体归 control。即使子查询
+只选常量（`SELECT 1 FROM orders`），其 FROM 关系的行集标记
+`row_set:shop.main.orders` 仍作为 control 上带：删空该表会改变外层保留的行，
+这条因果因此可追溯（见 `sql/14_exists_row_set.sql`）。
+
+标量子查询严格沿用内层字段的角色分桶：内层 value 重定基为外层 value，内层
+control 重定基为外层 control。因此按付款状态取最大金额
+`(SELECT MAX(amount) ... WHERE status='PAID')` 中 `amount` 仅是 value、
+`status` 仅是 control，不会出现角色互换。
+
 ## 4. 错误定位方式
 
 错误载荷统一结构：
