@@ -1,0 +1,192 @@
+{
+  "01_cte_shadow.sql": {
+    "expected_status": "ok",
+    "fields": {
+      "customer_id": {
+        "value": ["shop.main.customers.customer_id"],
+        "control_contains": ["shop.main.orders.status"]
+      },
+      "name": {
+        "value": ["shop.main.customers.name"],
+        "control_contains": ["shop.main.orders.status"]
+      },
+      "amount": {
+        "value": ["shop.main.orders.amount"],
+        "control_contains": ["shop.main.orders.status"]
+      }
+    },
+    "notes": "CTE orders 遮蔽基础表；外层 amount 仍重定基到基础列 shop.main.orders.amount；CTE 内 WHERE status 作为 control 穿透到外层字段"
+  },
+  "02_two_layer_alias.sql": {
+    "expected_status": "ok",
+    "fields": {
+      "oid": {
+        "value": ["shop.main.order_items.order_id"],
+        "forbidden_value_prefix": ["d."]
+      },
+      "net_amount": {
+        "value": [
+          "shop.main.order_items.qty",
+          "shop.main.order_items.unit_price"
+        ],
+        "control_contains": ["shop.main.order_items.qty"]
+      },
+      "product_name": {
+        "value": ["shop.main.products.product_name"]
+      }
+    },
+    "notes": "两层别名：d.oid 必须落到基础身份 order_items.order_id，禁止出现 d.oid 拼接边"
+  },
+  "03_star.sql": {
+    "expected_status": "ok",
+    "expected_field_count": 15,
+    "fields": {
+      "order_id": {
+        "value": ["shop.main.orders.order_id"],
+        "control_contains": ["shop.main.orders.order_date"]
+      }
+    },
+    "notes": "裸 * 展开 10 列(customers 5 + orders 5)，c.* 再展开 5 列，共 15 列"
+  },
+  "04_correlated_exists.sql": {
+    "expected_status": "ok",
+    "fields": {
+      "order_id": {
+        "value": ["shop.main.orders.order_id"],
+        "control_contains": [
+          "shop.main.order_items.order_id",
+          "shop.main.order_items.qty",
+          "shop.main.orders.status"
+        ],
+        "forbidden_value_contains": ["shop.main.order_items"]
+      }
+    },
+    "notes": "相关 EXISTS 的相关列 oi.order_id=o.order_id 与 oi.qty 只进 control；order_items 任何列都不得出现在 value"
+  },
+  "05_union_all.sql": {
+    "expected_status": "ok",
+    "fields": {
+      "id": {
+        "value": [
+          "shop.main.orders.order_id",
+          "shop.main.order_items.item_id"
+        ],
+        "control_contains": ["shop.main.orders.status", "shop.main.order_items.qty"]
+      },
+      "amt": {
+        "value": [
+          "shop.main.orders.amount",
+          "shop.main.order_items.qty",
+          "shop.main.order_items.unit_price"
+        ]
+      }
+    },
+    "notes": "UNION ALL 按位置合并，右分支列名(item_id)不同但血缘并入左分支字段名 id"
+  },
+  "06_case_window.sql": {
+    "expected_status": "ok",
+    "fields": {
+      "customer_label": {
+        "value": ["shop.main.customers.name"],
+        "control_contains": ["shop.main.customers.tier"],
+        "forbidden_value_contains": ["shop.main.customers.tier"]
+      },
+      "running_amount": {
+        "value": ["shop.main.orders.amount"],
+        "control_contains": [
+          "shop.main.customers.city",
+          "shop.main.orders.order_date"
+        ]
+      },
+      "city_rank": {
+        "value_row_sets": [
+          "row_set:shop.main.customers",
+          "row_set:shop.main.orders"
+        ],
+        "control_contains": [
+          "shop.main.customers.city",
+          "shop.main.orders.amount"
+        ]
+      },
+      "city_row_counter": {
+        "value_row_sets": [
+          "row_set:shop.main.customers",
+          "row_set:shop.main.orders"
+        ],
+        "forbidden_value_contains": [
+          "shop.main.customers.customer_id",
+          "shop.main.orders.order_id"
+        ]
+      }
+    },
+    "notes": "CASE 条件 control/分支 value 分离；窗口 PARTITION/ORDER 为 control；ROW_NUMBER 与 COUNT(*) OVER 仅产生行集标记"
+  },
+  "07_ambiguous.sql": {
+    "expected_status": "error",
+    "expected_error_code": "ambiguous_column",
+    "expected_location": [5, 5],
+    "notes": "未限定 customer_id 在 c/o 两个绑定同名 -> 歧义，必须给候选与行列号"
+  },
+  "08a_recursive_cte.sql": {
+    "expected_status": "unsupported",
+    "expected_error_code": "unsupported_syntax",
+    "notes": "递归 CTE 明确拒绝"
+  },
+  "08b_dynamic_sql.sql": {
+    "expected_status": "unsupported",
+    "expected_error_code": "unsupported_syntax",
+    "notes": "EXECUTE IMMEDIATE 动态 SQL 明确拒绝"
+  },
+  "08c_parse_error.sql": {
+    "expected_status": "unsupported",
+    "expected_error_code": "parse_error",
+    "expected_location": [5, 14],
+    "notes": "解析失败给行列定位"
+  },
+  "09_filter_only_column.sql": {
+    "expected_status": "ok",
+    "fields": {
+      "customer_name": {
+        "value": ["shop.main.customers.name"],
+        "control_contains": [
+          "shop.main.customers.city",
+          "shop.main.customers.tier"
+        ],
+        "forbidden_value_contains": [
+          "shop.main.customers.city",
+          "shop.main.customers.tier"
+        ]
+      }
+    },
+    "notes": "关键反证：city/tier 仅用于筛选，只在 control 中；value 中只有 name"
+  },
+  "10_having_derived.sql": {
+    "expected_status": "ok",
+    "fields": {
+      "total_amount": {
+        "value": [
+          "shop.main.order_items.qty",
+          "shop.main.order_items.unit_price"
+        ],
+        "control_contains": [
+          "shop.main.order_items.qty",
+          "shop.main.order_items.unit_price"
+        ]
+      }
+    },
+    "notes": "HAVING 过滤引用同一聚合表达式，基础列同时出现在 value 与 control"
+  },
+  "11_named_window.sql": {
+    "expected_status": "ok",
+    "fields": {
+      "region_seq": {
+        "value_row_sets": ["row_set:hr.main.staff"],
+        "control_contains": [
+          "hr.main.staff.region_id",
+          "hr.main.staff.hire_date"
+        ]
+      }
+    },
+    "notes": "命名窗口 WINDOW w AS (...) 的 PARTITION/ORDER control 可追溯；跨 catalog 表名解析"
+  }
+}

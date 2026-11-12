@@ -1,0 +1,144 @@
+{
+  "status": "ok",
+  "dialect": "duckdb",
+  "output_relation": "<top_query>",
+  "nodes": [
+    {
+      "id": "<top_query>.customer_id",
+      "kind": "field",
+      "relation": "<top_query>",
+      "name": "customer_id"
+    },
+    {
+      "id": "<top_query>.customer_name",
+      "kind": "field",
+      "relation": "<top_query>",
+      "name": "customer_name"
+    },
+    {
+      "id": "shop.main.customers.city",
+      "kind": "base_column"
+    },
+    {
+      "id": "shop.main.customers.customer_id",
+      "kind": "base_column"
+    },
+    {
+      "id": "shop.main.customers.name",
+      "kind": "base_column"
+    },
+    {
+      "id": "shop.main.customers.tier",
+      "kind": "base_column"
+    }
+  ],
+  "edges": [
+    {
+      "from": "shop.main.customers.city",
+      "to": "<top_query>.customer_id",
+      "type": "control",
+      "paths": [
+        [
+          "where",
+          "Where",
+          "this",
+          "func",
+          "AND",
+          "And",
+          "this",
+          "EQ",
+          "this",
+          "column",
+          "city"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.customers.city",
+      "to": "<top_query>.customer_name",
+      "type": "control",
+      "paths": [
+        [
+          "where",
+          "Where",
+          "this",
+          "func",
+          "AND",
+          "And",
+          "this",
+          "EQ",
+          "this",
+          "column",
+          "city"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.customers.customer_id",
+      "to": "<top_query>.customer_id",
+      "type": "value",
+      "paths": [
+        [
+          "projection",
+          "[0]",
+          "column",
+          "customer_id"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.customers.name",
+      "to": "<top_query>.customer_name",
+      "type": "value",
+      "paths": [
+        [
+          "projection",
+          "[1]",
+          "column",
+          "name"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.customers.tier",
+      "to": "<top_query>.customer_id",
+      "type": "control",
+      "paths": [
+        [
+          "where",
+          "Where",
+          "this",
+          "func",
+          "AND",
+          "And",
+          "expression",
+          "NEQ",
+          "this",
+          "column",
+          "tier"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.customers.tier",
+      "to": "<top_query>.customer_name",
+      "type": "control",
+      "paths": [
+        [
+          "where",
+          "Where",
+          "this",
+          "func",
+          "AND",
+          "And",
+          "expression",
+          "NEQ",
+          "this",
+          "column",
+          "tier"
+        ]
+      ]
+    }
+  ],
+  "errors": []
+}

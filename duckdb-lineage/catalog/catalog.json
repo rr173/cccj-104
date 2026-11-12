@@ -1,0 +1,42 @@
+{
+  "default_catalog": "shop",
+  "default_schema": "main",
+  "tables": [
+    {
+      "catalog": "shop",
+      "schema": "main",
+      "table": "customers",
+      "columns": ["customer_id", "name", "city", "tier", "created_at"]
+    },
+    {
+      "catalog": "shop",
+      "schema": "main",
+      "table": "orders",
+      "columns": ["order_id", "customer_id", "order_date", "status", "amount"]
+    },
+    {
+      "catalog": "shop",
+      "schema": "main",
+      "table": "order_items",
+      "columns": ["item_id", "order_id", "product_id", "qty", "unit_price"]
+    },
+    {
+      "catalog": "shop",
+      "schema": "main",
+      "table": "products",
+      "columns": ["product_id", "product_name", "category", "list_price"]
+    },
+    {
+      "catalog": "shop",
+      "schema": "ref",
+      "table": "regions",
+      "columns": ["region_id", "region_name", "country"]
+    },
+    {
+      "catalog": "hr",
+      "schema": "main",
+      "table": "staff",
+      "columns": ["staff_id", "full_name", "region_id", "hire_date"]
+    }
+  ]
+}

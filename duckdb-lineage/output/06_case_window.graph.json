@@ -1,0 +1,565 @@
+{
+  "status": "ok",
+  "dialect": "duckdb",
+  "output_relation": "<top_query>",
+  "nodes": [
+    {
+      "id": "<top_query>.city_rank",
+      "kind": "field",
+      "relation": "<top_query>",
+      "name": "city_rank"
+    },
+    {
+      "id": "<top_query>.city_row_counter",
+      "kind": "field",
+      "relation": "<top_query>",
+      "name": "city_row_counter"
+    },
+    {
+      "id": "<top_query>.customer_id",
+      "kind": "field",
+      "relation": "<top_query>",
+      "name": "customer_id"
+    },
+    {
+      "id": "<top_query>.customer_label",
+      "kind": "field",
+      "relation": "<top_query>",
+      "name": "customer_label"
+    },
+    {
+      "id": "<top_query>.order_id",
+      "kind": "field",
+      "relation": "<top_query>",
+      "name": "order_id"
+    },
+    {
+      "id": "<top_query>.running_amount",
+      "kind": "field",
+      "relation": "<top_query>",
+      "name": "running_amount"
+    },
+    {
+      "id": "row_set:shop.main.customers",
+      "kind": "row_set"
+    },
+    {
+      "id": "row_set:shop.main.orders",
+      "kind": "row_set"
+    },
+    {
+      "id": "shop.main.customers.city",
+      "kind": "base_column"
+    },
+    {
+      "id": "shop.main.customers.customer_id",
+      "kind": "base_column"
+    },
+    {
+      "id": "shop.main.customers.name",
+      "kind": "base_column"
+    },
+    {
+      "id": "shop.main.customers.tier",
+      "kind": "base_column"
+    },
+    {
+      "id": "shop.main.orders.amount",
+      "kind": "base_column"
+    },
+    {
+      "id": "shop.main.orders.customer_id",
+      "kind": "base_column"
+    },
+    {
+      "id": "shop.main.orders.order_date",
+      "kind": "base_column"
+    },
+    {
+      "id": "shop.main.orders.order_id",
+      "kind": "base_column"
+    },
+    {
+      "id": "shop.main.orders.status",
+      "kind": "base_column"
+    }
+  ],
+  "edges": [
+    {
+      "from": "row_set:shop.main.customers",
+      "to": "<top_query>.city_rank",
+      "type": "value",
+      "paths": [
+        [
+          "projection",
+          "[4]",
+          "window",
+          "row_set",
+          "alias:c"
+        ]
+      ]
+    },
+    {
+      "from": "row_set:shop.main.customers",
+      "to": "<top_query>.city_row_counter",
+      "type": "value",
+      "paths": [
+        [
+          "projection",
+          "[5]",
+          "window",
+          "row_set",
+          "alias:c"
+        ]
+      ]
+    },
+    {
+      "from": "row_set:shop.main.orders",
+      "to": "<top_query>.city_rank",
+      "type": "value",
+      "paths": [
+        [
+          "projection",
+          "[4]",
+          "window",
+          "row_set",
+          "alias:o"
+        ]
+      ]
+    },
+    {
+      "from": "row_set:shop.main.orders",
+      "to": "<top_query>.city_row_counter",
+      "type": "value",
+      "paths": [
+        [
+          "projection",
+          "[5]",
+          "window",
+          "row_set",
+          "alias:o"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.customers.city",
+      "to": "<top_query>.city_rank",
+      "type": "control",
+      "paths": [
+        [
+          "projection",
+          "[4]",
+          "window",
+          "partition_by",
+          "[0]",
+          "column",
+          "city"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.customers.city",
+      "to": "<top_query>.city_row_counter",
+      "type": "control",
+      "paths": [
+        [
+          "projection",
+          "[5]",
+          "window",
+          "partition_by",
+          "[0]",
+          "column",
+          "city"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.customers.city",
+      "to": "<top_query>.running_amount",
+      "type": "control",
+      "paths": [
+        [
+          "projection",
+          "[3]",
+          "window",
+          "partition_by",
+          "[0]",
+          "column",
+          "city"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.customers.customer_id",
+      "to": "<top_query>.city_rank",
+      "type": "control",
+      "paths": [
+        [
+          "join_on",
+          "EQ",
+          "expression",
+          "column",
+          "customer_id"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.customers.customer_id",
+      "to": "<top_query>.city_row_counter",
+      "type": "control",
+      "paths": [
+        [
+          "join_on",
+          "EQ",
+          "expression",
+          "column",
+          "customer_id"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.customers.customer_id",
+      "to": "<top_query>.customer_id",
+      "type": "control",
+      "paths": [
+        [
+          "join_on",
+          "EQ",
+          "expression",
+          "column",
+          "customer_id"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.customers.customer_id",
+      "to": "<top_query>.customer_id",
+      "type": "value",
+      "paths": [
+        [
+          "projection",
+          "[0]",
+          "column",
+          "customer_id"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.customers.customer_id",
+      "to": "<top_query>.customer_label",
+      "type": "control",
+      "paths": [
+        [
+          "join_on",
+          "EQ",
+          "expression",
+          "column",
+          "customer_id"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.customers.customer_id",
+      "to": "<top_query>.order_id",
+      "type": "control",
+      "paths": [
+        [
+          "join_on",
+          "EQ",
+          "expression",
+          "column",
+          "customer_id"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.customers.customer_id",
+      "to": "<top_query>.running_amount",
+      "type": "control",
+      "paths": [
+        [
+          "join_on",
+          "EQ",
+          "expression",
+          "column",
+          "customer_id"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.customers.name",
+      "to": "<top_query>.customer_label",
+      "type": "value",
+      "paths": [
+        [
+          "projection",
+          "[2]",
+          "case",
+          "when[0]",
+          "then",
+          "column",
+          "name"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.customers.tier",
+      "to": "<top_query>.customer_label",
+      "type": "control",
+      "paths": [
+        [
+          "projection",
+          "[2]",
+          "case",
+          "when[0]",
+          "condition",
+          "EQ",
+          "this",
+          "column",
+          "tier"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.orders.amount",
+      "to": "<top_query>.city_rank",
+      "type": "control",
+      "paths": [
+        [
+          "projection",
+          "[4]",
+          "window",
+          "order_by",
+          "[0]",
+          "column",
+          "amount"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.orders.amount",
+      "to": "<top_query>.running_amount",
+      "type": "value",
+      "paths": [
+        [
+          "projection",
+          "[3]",
+          "window",
+          "arg[0]",
+          "column",
+          "amount"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.orders.customer_id",
+      "to": "<top_query>.city_rank",
+      "type": "control",
+      "paths": [
+        [
+          "join_on",
+          "EQ",
+          "this",
+          "column",
+          "customer_id"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.orders.customer_id",
+      "to": "<top_query>.city_row_counter",
+      "type": "control",
+      "paths": [
+        [
+          "join_on",
+          "EQ",
+          "this",
+          "column",
+          "customer_id"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.orders.customer_id",
+      "to": "<top_query>.customer_id",
+      "type": "control",
+      "paths": [
+        [
+          "join_on",
+          "EQ",
+          "this",
+          "column",
+          "customer_id"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.orders.customer_id",
+      "to": "<top_query>.customer_label",
+      "type": "control",
+      "paths": [
+        [
+          "join_on",
+          "EQ",
+          "this",
+          "column",
+          "customer_id"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.orders.customer_id",
+      "to": "<top_query>.order_id",
+      "type": "control",
+      "paths": [
+        [
+          "join_on",
+          "EQ",
+          "this",
+          "column",
+          "customer_id"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.orders.customer_id",
+      "to": "<top_query>.running_amount",
+      "type": "control",
+      "paths": [
+        [
+          "join_on",
+          "EQ",
+          "this",
+          "column",
+          "customer_id"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.orders.order_date",
+      "to": "<top_query>.running_amount",
+      "type": "control",
+      "paths": [
+        [
+          "projection",
+          "[3]",
+          "window",
+          "order_by",
+          "[0]",
+          "column",
+          "order_date"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.orders.order_id",
+      "to": "<top_query>.order_id",
+      "type": "value",
+      "paths": [
+        [
+          "projection",
+          "[1]",
+          "column",
+          "order_id"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.orders.status",
+      "to": "<top_query>.city_rank",
+      "type": "control",
+      "paths": [
+        [
+          "where",
+          "Where",
+          "this",
+          "in",
+          "left",
+          "column",
+          "status"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.orders.status",
+      "to": "<top_query>.city_row_counter",
+      "type": "control",
+      "paths": [
+        [
+          "where",
+          "Where",
+          "this",
+          "in",
+          "left",
+          "column",
+          "status"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.orders.status",
+      "to": "<top_query>.customer_id",
+      "type": "control",
+      "paths": [
+        [
+          "where",
+          "Where",
+          "this",
+          "in",
+          "left",
+          "column",
+          "status"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.orders.status",
+      "to": "<top_query>.customer_label",
+      "type": "control",
+      "paths": [
+        [
+          "where",
+          "Where",
+          "this",
+          "in",
+          "left",
+          "column",
+          "status"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.orders.status",
+      "to": "<top_query>.order_id",
+      "type": "control",
+      "paths": [
+        [
+          "where",
+          "Where",
+          "this",
+          "in",
+          "left",
+          "column",
+          "status"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.orders.status",
+      "to": "<top_query>.running_amount",
+      "type": "control",
+      "paths": [
+        [
+          "where",
+          "Where",
+          "this",
+          "in",
+          "left",
+          "column",
+          "status"
+        ]
+      ]
+    }
+  ],
+  "errors": []
+}

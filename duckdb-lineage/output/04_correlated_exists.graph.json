@@ -1,0 +1,403 @@
+{
+  "status": "ok",
+  "dialect": "duckdb",
+  "output_relation": "<top_query>",
+  "nodes": [
+    {
+      "id": "<top_query>.amount",
+      "kind": "field",
+      "relation": "<top_query>",
+      "name": "amount"
+    },
+    {
+      "id": "<top_query>.customer_id",
+      "kind": "field",
+      "relation": "<top_query>",
+      "name": "customer_id"
+    },
+    {
+      "id": "<top_query>.order_id",
+      "kind": "field",
+      "relation": "<top_query>",
+      "name": "order_id"
+    },
+    {
+      "id": "shop.main.order_items.order_id",
+      "kind": "base_column"
+    },
+    {
+      "id": "shop.main.order_items.qty",
+      "kind": "base_column"
+    },
+    {
+      "id": "shop.main.orders.amount",
+      "kind": "base_column"
+    },
+    {
+      "id": "shop.main.orders.customer_id",
+      "kind": "base_column"
+    },
+    {
+      "id": "shop.main.orders.order_id",
+      "kind": "base_column"
+    },
+    {
+      "id": "shop.main.orders.status",
+      "kind": "base_column"
+    }
+  ],
+  "edges": [
+    {
+      "from": "shop.main.order_items.order_id",
+      "to": "<top_query>.amount",
+      "type": "control",
+      "paths": [
+        [
+          "where",
+          "Where",
+          "this",
+          "func",
+          "AND",
+          "And",
+          "expression",
+          "exists",
+          "where",
+          "Where",
+          "this",
+          "func",
+          "AND",
+          "And",
+          "this",
+          "EQ",
+          "this",
+          "column",
+          "order_id"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.order_items.order_id",
+      "to": "<top_query>.customer_id",
+      "type": "control",
+      "paths": [
+        [
+          "where",
+          "Where",
+          "this",
+          "func",
+          "AND",
+          "And",
+          "expression",
+          "exists",
+          "where",
+          "Where",
+          "this",
+          "func",
+          "AND",
+          "And",
+          "this",
+          "EQ",
+          "this",
+          "column",
+          "order_id"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.order_items.order_id",
+      "to": "<top_query>.order_id",
+      "type": "control",
+      "paths": [
+        [
+          "where",
+          "Where",
+          "this",
+          "func",
+          "AND",
+          "And",
+          "expression",
+          "exists",
+          "where",
+          "Where",
+          "this",
+          "func",
+          "AND",
+          "And",
+          "this",
+          "EQ",
+          "this",
+          "column",
+          "order_id"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.order_items.qty",
+      "to": "<top_query>.amount",
+      "type": "control",
+      "paths": [
+        [
+          "where",
+          "Where",
+          "this",
+          "func",
+          "AND",
+          "And",
+          "expression",
+          "exists",
+          "where",
+          "Where",
+          "this",
+          "func",
+          "AND",
+          "And",
+          "expression",
+          "GTE",
+          "this",
+          "column",
+          "qty"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.order_items.qty",
+      "to": "<top_query>.customer_id",
+      "type": "control",
+      "paths": [
+        [
+          "where",
+          "Where",
+          "this",
+          "func",
+          "AND",
+          "And",
+          "expression",
+          "exists",
+          "where",
+          "Where",
+          "this",
+          "func",
+          "AND",
+          "And",
+          "expression",
+          "GTE",
+          "this",
+          "column",
+          "qty"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.order_items.qty",
+      "to": "<top_query>.order_id",
+      "type": "control",
+      "paths": [
+        [
+          "where",
+          "Where",
+          "this",
+          "func",
+          "AND",
+          "And",
+          "expression",
+          "exists",
+          "where",
+          "Where",
+          "this",
+          "func",
+          "AND",
+          "And",
+          "expression",
+          "GTE",
+          "this",
+          "column",
+          "qty"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.orders.amount",
+      "to": "<top_query>.amount",
+      "type": "value",
+      "paths": [
+        [
+          "projection",
+          "[2]",
+          "column",
+          "amount"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.orders.customer_id",
+      "to": "<top_query>.customer_id",
+      "type": "value",
+      "paths": [
+        [
+          "projection",
+          "[1]",
+          "column",
+          "customer_id"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.orders.order_id",
+      "to": "<top_query>.amount",
+      "type": "control",
+      "paths": [
+        [
+          "where",
+          "Where",
+          "this",
+          "func",
+          "AND",
+          "And",
+          "expression",
+          "exists",
+          "where",
+          "Where",
+          "this",
+          "func",
+          "AND",
+          "And",
+          "this",
+          "EQ",
+          "expression",
+          "column",
+          "order_id"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.orders.order_id",
+      "to": "<top_query>.customer_id",
+      "type": "control",
+      "paths": [
+        [
+          "where",
+          "Where",
+          "this",
+          "func",
+          "AND",
+          "And",
+          "expression",
+          "exists",
+          "where",
+          "Where",
+          "this",
+          "func",
+          "AND",
+          "And",
+          "this",
+          "EQ",
+          "expression",
+          "column",
+          "order_id"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.orders.order_id",
+      "to": "<top_query>.order_id",
+      "type": "control",
+      "paths": [
+        [
+          "where",
+          "Where",
+          "this",
+          "func",
+          "AND",
+          "And",
+          "expression",
+          "exists",
+          "where",
+          "Where",
+          "this",
+          "func",
+          "AND",
+          "And",
+          "this",
+          "EQ",
+          "expression",
+          "column",
+          "order_id"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.orders.order_id",
+      "to": "<top_query>.order_id",
+      "type": "value",
+      "paths": [
+        [
+          "projection",
+          "[0]",
+          "column",
+          "order_id"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.orders.status",
+      "to": "<top_query>.amount",
+      "type": "control",
+      "paths": [
+        [
+          "where",
+          "Where",
+          "this",
+          "func",
+          "AND",
+          "And",
+          "this",
+          "EQ",
+          "this",
+          "column",
+          "status"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.orders.status",
+      "to": "<top_query>.customer_id",
+      "type": "control",
+      "paths": [
+        [
+          "where",
+          "Where",
+          "this",
+          "func",
+          "AND",
+          "And",
+          "this",
+          "EQ",
+          "this",
+          "column",
+          "status"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.orders.status",
+      "to": "<top_query>.order_id",
+      "type": "control",
+      "paths": [
+        [
+          "where",
+          "Where",
+          "this",
+          "func",
+          "AND",
+          "And",
+          "this",
+          "EQ",
+          "this",
+          "column",
+          "status"
+        ]
+      ]
+    }
+  ],
+  "errors": []
+}

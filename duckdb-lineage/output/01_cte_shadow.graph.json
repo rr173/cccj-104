@@ -1,0 +1,265 @@
+{
+  "status": "ok",
+  "dialect": "duckdb",
+  "output_relation": "<top_query>",
+  "nodes": [
+    {
+      "id": "<top_query>.amount",
+      "kind": "field",
+      "relation": "<top_query>",
+      "name": "amount"
+    },
+    {
+      "id": "<top_query>.customer_id",
+      "kind": "field",
+      "relation": "<top_query>",
+      "name": "customer_id"
+    },
+    {
+      "id": "<top_query>.name",
+      "kind": "field",
+      "relation": "<top_query>",
+      "name": "name"
+    },
+    {
+      "id": "shop.main.customers.customer_id",
+      "kind": "base_column"
+    },
+    {
+      "id": "shop.main.customers.name",
+      "kind": "base_column"
+    },
+    {
+      "id": "shop.main.orders.amount",
+      "kind": "base_column"
+    },
+    {
+      "id": "shop.main.orders.customer_id",
+      "kind": "base_column"
+    },
+    {
+      "id": "shop.main.orders.status",
+      "kind": "base_column"
+    }
+  ],
+  "edges": [
+    {
+      "from": "shop.main.customers.customer_id",
+      "to": "<top_query>.amount",
+      "type": "control",
+      "paths": [
+        [
+          "join_on",
+          "EQ",
+          "expression",
+          "column",
+          "customer_id"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.customers.customer_id",
+      "to": "<top_query>.customer_id",
+      "type": "control",
+      "paths": [
+        [
+          "join_on",
+          "EQ",
+          "expression",
+          "column",
+          "customer_id"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.customers.customer_id",
+      "to": "<top_query>.customer_id",
+      "type": "value",
+      "paths": [
+        [
+          "projection",
+          "[0]",
+          "column",
+          "customer_id"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.customers.customer_id",
+      "to": "<top_query>.name",
+      "type": "control",
+      "paths": [
+        [
+          "join_on",
+          "EQ",
+          "expression",
+          "column",
+          "customer_id"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.customers.name",
+      "to": "<top_query>.name",
+      "type": "value",
+      "paths": [
+        [
+          "projection",
+          "[1]",
+          "column",
+          "name"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.orders.amount",
+      "to": "<top_query>.amount",
+      "type": "value",
+      "paths": [
+        [
+          "projection",
+          "[2]",
+          "column",
+          "amount",
+          "projection",
+          "[1]",
+          "Mul",
+          "this",
+          "column",
+          "amount"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.orders.customer_id",
+      "to": "<top_query>.amount",
+      "type": "control",
+      "paths": [
+        [
+          "join_on",
+          "EQ",
+          "this",
+          "column",
+          "customer_id",
+          "projection",
+          "[0]",
+          "column",
+          "customer_id"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.orders.customer_id",
+      "to": "<top_query>.customer_id",
+      "type": "control",
+      "paths": [
+        [
+          "join_on",
+          "EQ",
+          "this",
+          "column",
+          "customer_id",
+          "projection",
+          "[0]",
+          "column",
+          "customer_id"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.orders.customer_id",
+      "to": "<top_query>.name",
+      "type": "control",
+      "paths": [
+        [
+          "join_on",
+          "EQ",
+          "this",
+          "column",
+          "customer_id",
+          "projection",
+          "[0]",
+          "column",
+          "customer_id"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.orders.status",
+      "to": "<top_query>.amount",
+      "type": "control",
+      "paths": [
+        [
+          "join_on",
+          "EQ",
+          "this",
+          "column",
+          "customer_id",
+          "where",
+          "Where",
+          "this",
+          "EQ",
+          "this",
+          "column",
+          "status"
+        ],
+        [
+          "projection",
+          "[2]",
+          "column",
+          "amount",
+          "where",
+          "Where",
+          "this",
+          "EQ",
+          "this",
+          "column",
+          "status"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.orders.status",
+      "to": "<top_query>.customer_id",
+      "type": "control",
+      "paths": [
+        [
+          "join_on",
+          "EQ",
+          "this",
+          "column",
+          "customer_id",
+          "where",
+          "Where",
+          "this",
+          "EQ",
+          "this",
+          "column",
+          "status"
+        ]
+      ]
+    },
+    {
+      "from": "shop.main.orders.status",
+      "to": "<top_query>.name",
+      "type": "control",
+      "paths": [
+        [
+          "join_on",
+          "EQ",
+          "this",
+          "column",
+          "customer_id",
+          "where",
+          "Where",
+          "this",
+          "EQ",
+          "this",
+          "column",
+          "status"
+        ]
+      ]
+    }
+  ],
+  "errors": []
+}

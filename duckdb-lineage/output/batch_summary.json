@@ -1,0 +1,127 @@
+{
+  "results": [
+    {
+      "sql_file": "01_cte_shadow.sql",
+      "status": "ok",
+      "field_count": 3,
+      "errors": []
+    },
+    {
+      "sql_file": "02_two_layer_alias.sql",
+      "status": "ok",
+      "field_count": 3,
+      "errors": []
+    },
+    {
+      "sql_file": "03_star.sql",
+      "status": "ok",
+      "field_count": 15,
+      "errors": []
+    },
+    {
+      "sql_file": "04_correlated_exists.sql",
+      "status": "ok",
+      "field_count": 3,
+      "errors": []
+    },
+    {
+      "sql_file": "05_union_all.sql",
+      "status": "ok",
+      "field_count": 2,
+      "errors": []
+    },
+    {
+      "sql_file": "06_case_window.sql",
+      "status": "ok",
+      "field_count": 6,
+      "errors": []
+    },
+    {
+      "sql_file": "07_ambiguous.sql",
+      "status": "error",
+      "field_count": 0,
+      "errors": [
+        {
+          "code": "ambiguous_column",
+          "message": "列 'customer_id' 存在歧义，候选绑定: c.customer_id, o.customer_id",
+          "location": {
+            "line": 5,
+            "col": 5,
+            "snippet": "customer_id"
+          },
+          "column": "customer_id",
+          "candidates": [
+            "c.customer_id",
+            "o.customer_id"
+          ]
+        }
+      ]
+    },
+    {
+      "sql_file": "08a_recursive_cte.sql",
+      "status": "unsupported",
+      "field_count": 0,
+      "errors": [
+        {
+          "code": "unsupported_syntax",
+          "message": "递归 CTE 不受支持（递归终止条件与固定点语义无法静态展开为列级血缘）",
+          "location": {
+            "line": 3,
+            "col": 16,
+            "snippet": "walk(order_id, parent_id, depth) AS (SELECT order_id, order_id, 0 FROM orders UNION ALL SELECT o.order_id, w.parent_id, "
+          }
+        }
+      ]
+    },
+    {
+      "sql_file": "08b_dynamic_sql.sql",
+      "status": "unsupported",
+      "field_count": 0,
+      "errors": [
+        {
+          "code": "unsupported_syntax",
+          "message": "动态 SQL / 命令式语句不受支持: /* 场景 08b：动态 SQL -> unsupported */ /* 语句文本在运行时才拼接，静态分析看不到真实 AST，必须拒绝而非猜测。 */ EXE",
+          "location": {
+            "line": 3,
+            "col": 1,
+            "snippet": "/* 场景 08b：动态 SQL -> unsupported */ /* 语句文本在运行时才拼接，静态分析看不到真实 AST，必须拒绝而非猜测。 */ EXECUTE IMMEDIATE 'SELECT order_id, amount "
+          }
+        }
+      ]
+    },
+    {
+      "sql_file": "08c_parse_error.sql",
+      "status": "unsupported",
+      "field_count": 0,
+      "errors": [
+        {
+          "code": "parse_error",
+          "message": "Required keyword: 'expression' missing for <class 'sqlglot.expressions.core.EQ'>",
+          "location": {
+            "line": 5,
+            "col": 14,
+            "snippet": "="
+          }
+        }
+      ]
+    },
+    {
+      "sql_file": "09_filter_only_column.sql",
+      "status": "ok",
+      "field_count": 2,
+      "errors": []
+    },
+    {
+      "sql_file": "10_having_derived.sql",
+      "status": "ok",
+      "field_count": 2,
+      "errors": []
+    },
+    {
+      "sql_file": "11_named_window.sql",
+      "status": "ok",
+      "field_count": 3,
+      "errors": []
+    }
+  ]
+}
