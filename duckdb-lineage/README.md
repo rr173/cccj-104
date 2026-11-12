@@ -1,4 +1,13 @@
-# DuckDB SQL 列级血缘抽取器
+# DuckDB SQL 列级血缘抽取器 + 视图组发布工具
+
+本仓库包含两个相互独立的工具：
+
+* **lineage**：面向分析数据集 *变更审查* 的列级血缘工具（下文）。
+* **viewctl**：把一组视图定义作为一个版本发布到 DuckDB 库文件的本地
+  迁移工具（预览试装 / 事务应用 / 版本核对），见
+  [`docs/viewctl.md`](docs/viewctl.md) 与 `demo/sensor/run_demo.py`。
+
+---
 
 面向分析数据集 **变更审查** 的列级血缘工具。Python 编写，SQL 语法树交给
 [SQLGlot](https://github.com/tobymao/sqlglot)（DuckDB 方言）解析，输出确定性
@@ -30,9 +39,17 @@ duckdb-lineage/
 │   ├── expressions.py            # 表达式 value/control/existence 分桶、CASE/窗口/EXISTS
 │   ├── positions.py              # token 行列定位
 │   ├── catalog.py / model.py / graph.py / errors.py / cli.py
+├── src/viewctl/                  # 视图组版本化发布工具（与抽取器独立）
+│   ├── manifest.py               # 资产清单加载、源指纹
+│   ├── refs.py                   # 对象引用提取（CTE/别名感知）、拓扑排序
+│   ├── registry.py               # 库内注册表（版本号/管理集/历史）
+│   ├── planner.py / core.py / cli.py / errors.py
+├── demo/sensor/                  # 传感器三层视图两版发布演示（独立预期核对）
 ├── scripts/                      # DuckDB 执行、期望核对、pytest、一键验证
-├── tests/test_lineage.py         # 32 个 pytest 单元测试
+├── tests/test_lineage.py         # 32 个血缘单元测试
+├── tests/test_viewctl.py         # 25 个发布工具回归测试（实际开库核对）
 ├── docs/dialect_and_errors.md    # 方言范围、三类依赖语义与错误定位
+├── docs/viewctl.md               # 清单格式、预览内容、版本核对与失败处理
 └── docs/root_cause.md            # 本次缺陷的根因说明
 ```
 
@@ -68,6 +85,11 @@ python3 -I src/lineage/cli.py impact \
 # 5) 批量分析整个目录
 python3 -I src/lineage/cli.py batch \
   --catalog catalog/catalog.json --sql-dir sql
+
+# 6) 视图组版本化发布（viewctl，独立于血缘命令）
+python3 -I src/viewctl/cli.py preview --db /path/sensor.duckdb \
+  --assets demo/sensor/assets_v1
+python3 -I demo/sensor/run_demo.py   # 端到端演示（建库/播种/预览/发布/核对）
 ```
 
 ### 输出片段（图格式）

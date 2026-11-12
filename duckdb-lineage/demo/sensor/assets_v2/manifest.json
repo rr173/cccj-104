@@ -1,0 +1,8 @@
+{
+  "schema": "main",
+  "views": {
+    "sensor_alerts": "queries/30_sensor_alerts.sql",
+    "sensor_hourly": "queries/20_sensor_hourly.sql",
+    "sensor_cleaned": "queries/10_sensor_cleaned.sql"
+  }
+}
