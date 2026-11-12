@@ -1,6 +1,6 @@
-# DuckDB SQL 列级血缘抽取器 + 视图组发布工具 + 传感器历史补算链
+# DuckDB SQL 列级血缘抽取器 + 视图组发布工具 + 传感器历史补算链 + 结果对账
 
-本仓库包含三个相互独立的工具：
+本仓库包含四个相互独立的工具：
 
 * **lineage**：面向分析数据集 *变更审查* 的列级血缘工具（下文）。
 * **viewctl**：把一组视图定义作为一个版本发布到 DuckDB 库文件的本地
@@ -10,6 +10,10 @@
   修改时在同一事务里重算受影响读数结论与小时指标，见
   [`docs/sensor_history.md`](docs/sensor_history.md) 与
   `demo/sensor_history/run_demo.py`。
+* **sqlrecon**：针对 DuckDB 文件的 SQL 改写 **结果对账** 工具——按命名检查
+  清单实际执行新旧两条只读查询，按多重集合比较结果（忽略顺序、保留重复行、
+  业务键分组、一对一最大匹配、精确数值与容差），见
+  [`docs/sqlrecon.md`](docs/sqlrecon.md) 与 `demo/recon/run_demo.py`。
 
 ---
 
@@ -53,16 +57,27 @@ duckdb-lineage/
 │   ├── db.py                     # 表结构（原始读数/校准/明细/小时/影响范围）
 │   ├── core.py                   # 事务化导入/校准回补/小时重算/影响登记
 │   └── cli.py                    # init/ingest/calibrate/detail/hourly/runs/rebuild/status
+├── src/sqlrecon/                 # SQL 改写结果对账（与上面三者独立）
+│   ├── guard.py                  # 单条只读查询静态护栏（写/多语句/外部文件/随机表达式）
+│   ├── manifest.py               # 命名检查清单加载与规则校验
+│   ├── runner.py                 # 只读连接、同一读取事务执行、列结构核对
+│   ├── compare.py                # 分组、精确/容差标量、Hopcroft-Karp 一对一最大匹配
+│   ├── encoding.py               # 不丢精度的自描述值编码（大整数/DECIMAL/NaN/Inf）
+│   └── engine.py / cli.py / errors.py
 ├── demo/sensor/                  # 传感器三层视图两版发布演示（独立预期核对）
 ├── demo/sensor_history/          # 历史补算演示（含真实 SIGKILL 恢复检查）
+├── demo/recon/                   # 结果对账演示（建库/26 项清单/查询对/一键演示）
 ├── tools/sensor_oracle.py        # 不复用线上逻辑的独立全量对照计算
+├── tools/exhaustive_recon.py     # 独立穷举配对核对（不调用线上最大匹配函数）
 ├── scripts/                      # DuckDB 执行、期望核对、pytest、一键验证
 ├── tests/test_lineage.py         # 32 个血缘单元测试
-├── tests/test_viewctl.py         # 25 个发布工具回归测试（实际开库核对）
-├── tests/test_sensorpipe.py      # 16 个补算链回归测试（实际开库核对）
+├── tests/test_viewctl.py         # 34 个发布工具回归测试（实际开库核对）
+├── tests/test_sensorpipe.py      # 17 个补算链回归测试（实际开库核对）
+├── tests/test_sqlrecon.py        # 78 个对账回归测试（实际开库 + 穷举/确定性核对）
 ├── docs/dialect_and_errors.md    # 方言范围、三类依赖语义与错误定位
 ├── docs/viewctl.md               # 清单格式、预览内容、版本核对与失败处理
 ├── docs/sensor_history.md        # 输入格式、拒绝处理、缺校准补救、事务保证
+├── docs/sqlrecon.md              # 对账规则格式、差异读法、三类运行结论
 └── docs/root_cause.md            # 本次缺陷的根因说明
 ```
 
@@ -114,6 +129,13 @@ python3 -I src/sensorpipe/cli.py detail  --db /tmp/sensor.duckdb
 python3 -I src/sensorpipe/cli.py hourly  --db /tmp/sensor.duckdb
 python3 -I demo/sensor_history/run_demo.py        # 端到端演示（含崩溃恢复）
 python3 -I tools/sensor_oracle.py --db DB --check # 独立全量对照
+
+# 8) SQL 改写结果对账（sqlrecon，独立于上面三个工具）
+python3 -I demo/recon/build_db.py                 # 构建演示库
+python3 -I src/sqlrecon/cli.py run \
+  --db demo/recon/recon.duckdb \
+  --manifest demo/recon/checks.json               # 退出码 0/1/2 = 相同/差异/检查错误
+python3 -I demo/recon/run_demo.py                 # 端到端演示（含穷举交叉核对）
 ```
 
 ### 输出片段（图格式）

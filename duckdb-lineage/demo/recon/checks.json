@@ -1,0 +1,229 @@
+{
+  "checks": [
+    {
+      "name": "01_hourly_nested_vs_join",
+      "description": "等价的嵌套相关子查询与 JOIN 预聚改写：小时均温结果一致（oracle 核对）",
+      "keys": ["sensor_id", "hour_utc"],
+      "old_sql_file": "queries/10_hourly_nested.sql",
+      "new_sql_file": "queries/10_hourly_join.sql",
+      "tolerance": [
+        {"column": "avg_temperature", "abs": 1e-9, "rel": 1e-12}
+      ],
+      "oracle": true
+    },
+    {
+      "name": "02_set_query_order_swapped",
+      "description": "UNION ALL 分支顺序对调：忽略返回顺序，多重集合一致（oracle 核对）",
+      "old_sql_file": "queries/11_set_old.sql",
+      "new_sql_file": "queries/11_set_new.sql",
+      "oracle": true
+    },
+    {
+      "name": "03_row_duplicated",
+      "description": "新查询错误复制一行：重复行数对不上，指出多重集合差异（oracle 核对）",
+      "old_sql_file": "queries/20_full.sql",
+      "new_sql_file": "queries/21_copied.sql",
+      "expect": "difference",
+      "oracle": true
+    },
+    {
+      "name": "04_row_deleted",
+      "description": "新查询错误删除一行：左侧剩余 1 行（oracle 核对）",
+      "old_sql_file": "queries/20_full.sql",
+      "new_sql_file": "queries/22_deleted.sql",
+      "expect": "difference",
+      "oracle": true
+    },
+    {
+      "name": "05_tolerance_greedy_trap",
+      "description": "重复键+容差：贪心逐行最近配对会失败，一对一最大匹配可完整配上（oracle 核对）",
+      "keys": ["k"],
+      "old_sql_file": "queries/30_trap_left.sql",
+      "new_sql_file": "queries/30_trap_right.sql",
+      "tolerance": [
+        {"column": "a", "abs": 0.10, "rel": 0.0}
+      ],
+      "oracle": true
+    },
+    {
+      "name": "06_per_column_matches_whole_row_not",
+      "description": "a 列、b 列各自都能配上，整行却没有一对相同：必须判差异（oracle 核对）",
+      "keys": ["k"],
+      "old_sql_file": "queries/40_rowlock_left.sql",
+      "new_sql_file": "queries/40_rowlock_right.sql",
+      "expect": "difference",
+      "oracle": true
+    },
+    {
+      "name": "07_exact_huge_integer_and_decimal",
+      "description": "HUGEINT 大整数与高精度 DECIMAL 精确比较，不经过 float（oracle 核对）",
+      "keys": ["id"],
+      "old_sql_file": "queries/50_bigint_left.sql",
+      "new_sql_file": "queries/50_bigint_right.sql",
+      "oracle": true
+    },
+    {
+      "name": "08_special_floats",
+      "description": "NaN/±Inf/NULL 混合，同值集合换顺序：特殊值按语义各自相等（oracle 核对）",
+      "old_sql_file": "queries/60_special_left.sql",
+      "new_sql_file": "queries/60_special_right.sql",
+      "oracle": true
+    },
+    {
+      "name": "09_special_float_changed",
+      "description": "多引入一个 NaN：NaN 不与有限数/NULL 相等，判差异",
+      "old_sql_file": "queries/60_special_left.sql",
+      "new_sql_file": "queries/61_special_changed.sql",
+      "expect": "difference",
+      "oracle": true
+    },
+    {
+      "name": "10_null_key_groups",
+      "description": "NULL 业务键正常成组，两条 NULL 键重复行按多重集合配对（oracle 核对）",
+      "keys": ["k"],
+      "old_sql_file": "queries/70_nullkey_left.sql",
+      "new_sql_file": "queries/70_nullkey_right.sql",
+      "oracle": true
+    },
+    {
+      "name": "11_both_empty",
+      "description": "两边都返回空结果：空多重集合相等，空结果不被当成豁免（oracle 核对）",
+      "old_sql_file": "queries/80_empty_left.sql",
+      "new_sql_file": "queries/80_empty_right.sql",
+      "oracle": true
+    },
+    {
+      "name": "12_empty_vs_nonempty",
+      "description": "空结果对凭空多出的一行：判差异，右侧剩余 1 行",
+      "old_sql_file": "queries/80_empty_left.sql",
+      "new_sql_file": "queries/81_empty_vs_row.sql",
+      "expect": "difference",
+      "oracle": true
+    },
+    {
+      "name": "13_tolerance_at_threshold_exact",
+      "description": "DECIMAL 差值恰好等于阈值 a：|0.10| = 0.10，边界包含，判相同",
+      "keys": ["k"],
+      "old_sql": "SELECT 'z' AS k, CAST(1.00 AS DECIMAL(10,2)) AS x",
+      "new_sql": "SELECT 'z' AS k, CAST(1.10 AS DECIMAL(10,2)) AS x",
+      "tolerance": [
+        {"column": "x", "abs": 0.10, "rel": 0.0}
+      ],
+      "oracle": true
+    },
+    {
+      "name": "14_tolerance_just_over_threshold",
+      "description": "DECIMAL 差值超出阈值 0.001：判差异",
+      "keys": ["k"],
+      "old_sql": "SELECT 'z' AS k, CAST(1.000 AS DECIMAL(10,3)) AS x",
+      "new_sql": "SELECT 'z' AS k, CAST(1.101 AS DECIMAL(10,3)) AS x",
+      "tolerance": [
+        {"column": "x", "abs": 0.10, "rel": 0.0}
+      ],
+      "expect": "difference",
+      "oracle": true
+    },
+    {
+      "name": "15_relative_tolerance_boundary",
+      "description": "纯相对容差边界：r*max=0.10，差值 0.10 恰好满足",
+      "keys": ["k"],
+      "old_sql": "SELECT 'z' AS k, CAST(100.00 AS DECIMAL(10,2)) AS x",
+      "new_sql": "SELECT 'z' AS k, CAST(100.10 AS DECIMAL(10,2)) AS x",
+      "tolerance": [
+        {"column": "x", "abs": 0.0, "rel": 0.001}
+      ],
+      "oracle": true
+    },
+    {
+      "name": "16_no_keys_whole_table_one_group",
+      "description": "不指定业务键：整张结果当一个组做最大匹配（oracle 核对）",
+      "old_sql": "SELECT sensor_id, temperature FROM sensor_readings WHERE status = 'OK'",
+      "new_sql": "SELECT sensor_id, temperature FROM sensor_readings WHERE status = 'OK' ORDER BY temperature DESC",
+      "oracle": true
+    },
+    {
+      "name": "17_schema_signature_mismatch",
+      "description": "列名不同（label vs name）：列结构不符，作为检查错误而非数据差异",
+      "old_sql_file": "queries/80_empty_left.sql",
+      "new_sql_file": "queries/82_wrong_schema.sql",
+      "expect": "error",
+      "error_code": "schema_mismatch"
+    },
+    {
+      "name": "18_duplicate_output_column",
+      "description": "新侧输出重名列：明确拒绝",
+      "old_sql_file": "queries/80_empty_left.sql",
+      "new_sql_file": "queries/83_dup_column.sql",
+      "expect": "error",
+      "error_code": "schema_mismatch"
+    },
+    {
+      "name": "19_unknown_tolerance_column",
+      "description": "容差列在输出中不存在：找不到的规则列明确拒绝",
+      "keys": ["id"],
+      "old_sql_file": "queries/80_empty_left.sql",
+      "new_sql_file": "queries/80_empty_right.sql",
+      "tolerance": [
+        {"column": "ghost_metric", "abs": 0.1, "rel": 0.0}
+      ],
+      "expect": "error",
+      "error_code": "schema_mismatch"
+    },
+    {
+      "name": "20_unknown_key_column",
+      "description": "键列在输出中不存在：找不到的键列明确拒绝",
+      "keys": ["ghost_key"],
+      "old_sql_file": "queries/80_empty_left.sql",
+      "new_sql_file": "queries/80_empty_right.sql",
+      "expect": "error",
+      "error_code": "schema_mismatch"
+    },
+    {
+      "name": "21_write_hidden_in_cte",
+      "description": "UPDATE 藏在 WITH CTE 体内：静态护栏拒绝，不靠开头判断",
+      "old_sql_file": "queries/90_write_in_cte.sql",
+      "new_sql_file": "queries/10_hourly_join.sql",
+      "expect": "error",
+      "error_code": "sql_rejected"
+    },
+    {
+      "name": "22_external_file_table_function",
+      "description": "read_csv_auto 读外部文件：拒绝",
+      "old_sql_file": "queries/91_external_file.sql",
+      "new_sql_file": "queries/10_hourly_join.sql",
+      "expect": "error",
+      "error_code": "sql_rejected"
+    },
+    {
+      "name": "23_nondeterministic_random",
+      "description": "random() 每次运行会变：拒绝",
+      "old_sql_file": "queries/92_random.sql",
+      "new_sql_file": "queries/10_hourly_join.sql",
+      "expect": "error",
+      "error_code": "sql_rejected"
+    },
+    {
+      "name": "24_multiple_statements",
+      "description": "SELECT 后跟 DELETE 的多语句：整体拒绝",
+      "old_sql_file": "queries/93_multi_statement.sql",
+      "new_sql_file": "queries/10_hourly_join.sql",
+      "expect": "error",
+      "error_code": "sql_rejected"
+    },
+    {
+      "name": "25_runtime_query_error_continues",
+      "description": "查询引用不存在的表：执行错误与数据差异分开，且后续检查继续",
+      "old_sql_file": "queries/94_runtime_error.sql",
+      "new_sql_file": "queries/10_hourly_join.sql",
+      "expect": "error",
+      "error_code": "sql_execution_error"
+    },
+    {
+      "name": "26_last_check_still_runs_after_error",
+      "description": "上一项执行报错后，本项仍正常运行并通过（证明逐项隔离）",
+      "old_sql_file": "queries/80_empty_left.sql",
+      "new_sql_file": "queries/80_empty_right.sql",
+      "oracle": true
+    }
+  ]
+}

@@ -1,0 +1,640 @@
+{
+  "database": "/workspace/duckdb-lineage/demo/recon/recon.duckdb",
+  "manifest": "/workspace/duckdb-lineage/demo/recon/checks.json",
+  "overall_status": "error",
+  "summary": {
+    "checks_total": 26,
+    "equal": 11,
+    "difference": 6,
+    "error": 9
+  },
+  "checks": [
+    {
+      "name": "01_hourly_nested_vs_join",
+      "status": "equal",
+      "description": "等价的嵌套相关子查询与 JOIN 预聚改写：小时均温结果一致（oracle 核对）",
+      "result": {
+        "status": "equal",
+        "left_rows": 4,
+        "right_rows": 4,
+        "matched_pairs": 4,
+        "groups_total": 4,
+        "groups_with_difference": 0,
+        "differences": []
+      }
+    },
+    {
+      "name": "02_set_query_order_swapped",
+      "status": "equal",
+      "description": "UNION ALL 分支顺序对调：忽略返回顺序，多重集合一致（oracle 核对）",
+      "result": {
+        "status": "equal",
+        "left_rows": 8,
+        "right_rows": 8,
+        "matched_pairs": 8,
+        "groups_total": 1,
+        "groups_with_difference": 0,
+        "differences": []
+      }
+    },
+    {
+      "name": "03_row_duplicated",
+      "status": "difference",
+      "description": "新查询错误复制一行：重复行数对不上，指出多重集合差异（oracle 核对）",
+      "result": {
+        "status": "difference",
+        "left_rows": 7,
+        "right_rows": 8,
+        "matched_pairs": 7,
+        "groups_total": 1,
+        "groups_with_difference": 1,
+        "differences": [
+          {
+            "key": {},
+            "left_rows": 7,
+            "right_rows": 8,
+            "matched_pairs": 7,
+            "left_unmatched": [],
+            "right_unmatched": [
+              {
+                "row": {
+                  "sensor_id": {
+                    "t": "varchar",
+                    "v": "s1"
+                  },
+                  "measured_at": {
+                    "t": "timestamp",
+                    "v": "2026-03-01T10:05:00"
+                  },
+                  "temperature": {
+                    "t": "float",
+                    "v": 21.5
+                  }
+                },
+                "count": 1
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "04_row_deleted",
+      "status": "difference",
+      "description": "新查询错误删除一行：左侧剩余 1 行（oracle 核对）",
+      "result": {
+        "status": "difference",
+        "left_rows": 7,
+        "right_rows": 6,
+        "matched_pairs": 6,
+        "groups_total": 1,
+        "groups_with_difference": 1,
+        "differences": [
+          {
+            "key": {},
+            "left_rows": 7,
+            "right_rows": 6,
+            "matched_pairs": 6,
+            "left_unmatched": [
+              {
+                "row": {
+                  "sensor_id": {
+                    "t": "varchar",
+                    "v": "s1"
+                  },
+                  "measured_at": {
+                    "t": "timestamp",
+                    "v": "2026-03-01T11:05:00"
+                  },
+                  "temperature": {
+                    "t": "float",
+                    "v": 23.0
+                  }
+                },
+                "count": 1
+              }
+            ],
+            "right_unmatched": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "05_tolerance_greedy_trap",
+      "status": "equal",
+      "description": "重复键+容差：贪心逐行最近配对会失败，一对一最大匹配可完整配上（oracle 核对）",
+      "result": {
+        "status": "equal",
+        "left_rows": 2,
+        "right_rows": 2,
+        "matched_pairs": 2,
+        "groups_total": 1,
+        "groups_with_difference": 0,
+        "differences": []
+      }
+    },
+    {
+      "name": "06_per_column_matches_whole_row_not",
+      "status": "difference",
+      "description": "a 列、b 列各自都能配上，整行却没有一对相同：必须判差异（oracle 核对）",
+      "result": {
+        "status": "difference",
+        "left_rows": 2,
+        "right_rows": 2,
+        "matched_pairs": 0,
+        "groups_total": 1,
+        "groups_with_difference": 1,
+        "differences": [
+          {
+            "key": {
+              "k": {
+                "t": "varchar",
+                "v": "H"
+              }
+            },
+            "left_rows": 2,
+            "right_rows": 2,
+            "matched_pairs": 0,
+            "left_unmatched": [
+              {
+                "row": {
+                  "k": {
+                    "t": "varchar",
+                    "v": "H"
+                  },
+                  "a": {
+                    "t": "decimal",
+                    "v": "1.00"
+                  },
+                  "b": {
+                    "t": "decimal",
+                    "v": "1.00"
+                  }
+                },
+                "count": 1
+              },
+              {
+                "row": {
+                  "k": {
+                    "t": "varchar",
+                    "v": "H"
+                  },
+                  "a": {
+                    "t": "decimal",
+                    "v": "2.00"
+                  },
+                  "b": {
+                    "t": "decimal",
+                    "v": "2.00"
+                  }
+                },
+                "count": 1
+              }
+            ],
+            "right_unmatched": [
+              {
+                "row": {
+                  "k": {
+                    "t": "varchar",
+                    "v": "H"
+                  },
+                  "a": {
+                    "t": "decimal",
+                    "v": "1.00"
+                  },
+                  "b": {
+                    "t": "decimal",
+                    "v": "2.00"
+                  }
+                },
+                "count": 1
+              },
+              {
+                "row": {
+                  "k": {
+                    "t": "varchar",
+                    "v": "H"
+                  },
+                  "a": {
+                    "t": "decimal",
+                    "v": "2.00"
+                  },
+                  "b": {
+                    "t": "decimal",
+                    "v": "1.00"
+                  }
+                },
+                "count": 1
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "07_exact_huge_integer_and_decimal",
+      "status": "equal",
+      "description": "HUGEINT 大整数与高精度 DECIMAL 精确比较，不经过 float（oracle 核对）",
+      "result": {
+        "status": "equal",
+        "left_rows": 3,
+        "right_rows": 3,
+        "matched_pairs": 3,
+        "groups_total": 3,
+        "groups_with_difference": 0,
+        "differences": []
+      }
+    },
+    {
+      "name": "08_special_floats",
+      "status": "equal",
+      "description": "NaN/±Inf/NULL 混合，同值集合换顺序：特殊值按语义各自相等（oracle 核对）",
+      "result": {
+        "status": "equal",
+        "left_rows": 5,
+        "right_rows": 5,
+        "matched_pairs": 5,
+        "groups_total": 1,
+        "groups_with_difference": 0,
+        "differences": []
+      }
+    },
+    {
+      "name": "09_special_float_changed",
+      "status": "difference",
+      "description": "多引入一个 NaN：NaN 不与有限数/NULL 相等，判差异",
+      "result": {
+        "status": "difference",
+        "left_rows": 5,
+        "right_rows": 6,
+        "matched_pairs": 5,
+        "groups_total": 1,
+        "groups_with_difference": 1,
+        "differences": [
+          {
+            "key": {},
+            "left_rows": 5,
+            "right_rows": 6,
+            "matched_pairs": 5,
+            "left_unmatched": [],
+            "right_unmatched": [
+              {
+                "row": {
+                  "k": {
+                    "t": "varchar",
+                    "v": "e"
+                  },
+                  "f": {
+                    "t": "float",
+                    "v": "NaN"
+                  }
+                },
+                "count": 1
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "10_null_key_groups",
+      "status": "equal",
+      "description": "NULL 业务键正常成组，两条 NULL 键重复行按多重集合配对（oracle 核对）",
+      "result": {
+        "status": "equal",
+        "left_rows": 4,
+        "right_rows": 4,
+        "matched_pairs": 4,
+        "groups_total": 2,
+        "groups_with_difference": 0,
+        "differences": []
+      }
+    },
+    {
+      "name": "11_both_empty",
+      "status": "equal",
+      "description": "两边都返回空结果：空多重集合相等，空结果不被当成豁免（oracle 核对）",
+      "result": {
+        "status": "equal",
+        "left_rows": 0,
+        "right_rows": 0,
+        "matched_pairs": 0,
+        "groups_total": 0,
+        "groups_with_difference": 0,
+        "differences": []
+      }
+    },
+    {
+      "name": "12_empty_vs_nonempty",
+      "status": "difference",
+      "description": "空结果对凭空多出的一行：判差异，右侧剩余 1 行",
+      "result": {
+        "status": "difference",
+        "left_rows": 0,
+        "right_rows": 1,
+        "matched_pairs": 0,
+        "groups_total": 1,
+        "groups_with_difference": 1,
+        "differences": [
+          {
+            "key": {},
+            "left_rows": 0,
+            "right_rows": 1,
+            "matched_pairs": 0,
+            "left_unmatched": [],
+            "right_unmatched": [
+              {
+                "row": {
+                  "id": {
+                    "t": "integer",
+                    "v": -1
+                  },
+                  "label": {
+                    "t": "varchar",
+                    "v": "phantom"
+                  }
+                },
+                "count": 1
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "13_tolerance_at_threshold_exact",
+      "status": "equal",
+      "description": "DECIMAL 差值恰好等于阈值 a：|0.10| = 0.10，边界包含，判相同",
+      "result": {
+        "status": "equal",
+        "left_rows": 1,
+        "right_rows": 1,
+        "matched_pairs": 1,
+        "groups_total": 1,
+        "groups_with_difference": 0,
+        "differences": []
+      }
+    },
+    {
+      "name": "14_tolerance_just_over_threshold",
+      "status": "difference",
+      "description": "DECIMAL 差值超出阈值 0.001：判差异",
+      "result": {
+        "status": "difference",
+        "left_rows": 1,
+        "right_rows": 1,
+        "matched_pairs": 0,
+        "groups_total": 1,
+        "groups_with_difference": 1,
+        "differences": [
+          {
+            "key": {
+              "k": {
+                "t": "varchar",
+                "v": "z"
+              }
+            },
+            "left_rows": 1,
+            "right_rows": 1,
+            "matched_pairs": 0,
+            "left_unmatched": [
+              {
+                "row": {
+                  "k": {
+                    "t": "varchar",
+                    "v": "z"
+                  },
+                  "x": {
+                    "t": "decimal",
+                    "v": "1.000"
+                  }
+                },
+                "count": 1
+              }
+            ],
+            "right_unmatched": [
+              {
+                "row": {
+                  "k": {
+                    "t": "varchar",
+                    "v": "z"
+                  },
+                  "x": {
+                    "t": "decimal",
+                    "v": "1.101"
+                  }
+                },
+                "count": 1
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "15_relative_tolerance_boundary",
+      "status": "equal",
+      "description": "纯相对容差边界：r*max=0.10，差值 0.10 恰好满足",
+      "result": {
+        "status": "equal",
+        "left_rows": 1,
+        "right_rows": 1,
+        "matched_pairs": 1,
+        "groups_total": 1,
+        "groups_with_difference": 0,
+        "differences": []
+      }
+    },
+    {
+      "name": "16_no_keys_whole_table_one_group",
+      "status": "equal",
+      "description": "不指定业务键：整张结果当一个组做最大匹配（oracle 核对）",
+      "result": {
+        "status": "equal",
+        "left_rows": 7,
+        "right_rows": 7,
+        "matched_pairs": 7,
+        "groups_total": 1,
+        "groups_with_difference": 0,
+        "differences": []
+      }
+    },
+    {
+      "name": "17_schema_signature_mismatch",
+      "status": "error",
+      "description": "列名不同（label vs name）：列结构不符，作为检查错误而非数据差异",
+      "error": {
+        "code": "schema_mismatch",
+        "message": "检查 '17_schema_signature_mismatch' 两边列名/顺序/逻辑类型不一致；列必须同名、同序、同 DuckDB 逻辑类型，不做隐式类型转换。",
+        "details": {
+          "check": "17_schema_signature_mismatch",
+          "reason": "column_signature",
+          "differences": [
+            {
+              "position": "1",
+              "old_name": "label",
+              "old_type": "VARCHAR",
+              "new_name": "name",
+              "new_type": "VARCHAR"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "18_duplicate_output_column",
+      "status": "error",
+      "description": "新侧输出重名列：明确拒绝",
+      "error": {
+        "code": "schema_mismatch",
+        "message": "检查 '18_duplicate_output_column' 两边输出列数不同: 旧 2 列 / 新 3 列",
+        "details": {
+          "check": "18_duplicate_output_column",
+          "reason": "column_count",
+          "old_columns": [
+            "id",
+            "label"
+          ],
+          "new_columns": [
+            "id",
+            "label",
+            "label"
+          ]
+        }
+      }
+    },
+    {
+      "name": "19_unknown_tolerance_column",
+      "status": "error",
+      "description": "容差列在输出中不存在：找不到的规则列明确拒绝",
+      "error": {
+        "code": "schema_mismatch",
+        "message": "检查 '19_unknown_tolerance_column' 清单引用了输出中不存在的列；找不到的键列或规则列一律拒绝，不猜测、不忽略。",
+        "details": {
+          "check": "19_unknown_tolerance_column",
+          "reason": "unknown_named_column",
+          "problems": [
+            {
+              "kind": "tolerance",
+              "missing": [
+                "ghost_metric"
+              ]
+            }
+          ],
+          "available_columns": [
+            "id",
+            "label"
+          ]
+        }
+      }
+    },
+    {
+      "name": "20_unknown_key_column",
+      "status": "error",
+      "description": "键列在输出中不存在：找不到的键列明确拒绝",
+      "error": {
+        "code": "schema_mismatch",
+        "message": "检查 '20_unknown_key_column' 清单引用了输出中不存在的列；找不到的键列或规则列一律拒绝，不猜测、不忽略。",
+        "details": {
+          "check": "20_unknown_key_column",
+          "reason": "unknown_named_column",
+          "problems": [
+            {
+              "kind": "key",
+              "missing": [
+                "ghost_key"
+              ]
+            }
+          ],
+          "available_columns": [
+            "id",
+            "label"
+          ]
+        }
+      }
+    },
+    {
+      "name": "21_write_hidden_in_cte",
+      "status": "error",
+      "description": "UPDATE 藏在 WITH CTE 体内：静态护栏拒绝，不靠开头判断",
+      "error": {
+        "code": "sql_rejected",
+        "message": "旧查询(old) 包含禁止的 Update 节点：只允许只读查询，写语句、DDL、事务、ATTACH/DETACH、PRAGMA/SET、CALL、COPY、SHOW/DESCRIBE 等一律拒绝（含藏在 WITH CTE 体内的写操作）。",
+        "details": {
+          "label": "旧查询(old)",
+          "reason": "forbidden_node",
+          "node_type": "Update"
+        }
+      }
+    },
+    {
+      "name": "22_external_file_table_function",
+      "status": "error",
+      "description": "read_csv_auto 读外部文件：拒绝",
+      "error": {
+        "code": "sql_rejected",
+        "message": "旧查询(old) 使用了访问外部资源的表函数 'read_csv_auto'；read_*/ *_scan / glob 等文件表函数一律拒绝，对账查询只能引用库内表与视图。",
+        "details": {
+          "label": "旧查询(old)",
+          "reason": "external_table_function",
+          "func": "read_csv_auto"
+        }
+      }
+    },
+    {
+      "name": "23_nondeterministic_random",
+      "status": "error",
+      "description": "random() 每次运行会变：拒绝",
+      "error": {
+        "code": "sql_rejected",
+        "message": "旧查询(old) 使用了非确定性表达式 Rand：random/uuid/当前时间等每次运行可能变化的调用不允许出现在对账查询里。",
+        "details": {
+          "label": "旧查询(old)",
+          "reason": "nondeterministic",
+          "func": "rand"
+        }
+      }
+    },
+    {
+      "name": "24_multiple_statements",
+      "status": "error",
+      "description": "SELECT 后跟 DELETE 的多语句：整体拒绝",
+      "error": {
+        "code": "sql_rejected",
+        "message": "旧查询(old) 必须恰好包含一条语句，实际 2 条；多语句、脚本与空输入一律拒绝。",
+        "details": {
+          "label": "旧查询(old)",
+          "reason": "multiple_statements",
+          "statement_count": 2
+        }
+      }
+    },
+    {
+      "name": "25_runtime_query_error_continues",
+      "status": "error",
+      "description": "查询引用不存在的表：执行错误与数据差异分开，且后续检查继续",
+      "error": {
+        "code": "sql_execution_error",
+        "message": "旧查询(old) 查询执行失败: Catalog Error: Table with name table_that_does_not_exist does not exist!\nDid you mean \"information_schema.tables\"?",
+        "details": {
+          "label": "旧查询(old)",
+          "duckdb_error": "CatalogException"
+        }
+      }
+    },
+    {
+      "name": "26_last_check_still_runs_after_error",
+      "status": "equal",
+      "description": "上一项执行报错后，本项仍正常运行并通过（证明逐项隔离）",
+      "result": {
+        "status": "equal",
+        "left_rows": 0,
+        "right_rows": 0,
+        "matched_pairs": 0,
+        "groups_total": 0,
+        "groups_with_difference": 0,
+        "differences": []
+      }
+    }
+  ]
+}
