@@ -1,0 +1,11 @@
+{"reading_id":"s1-r1","sensor_id":"s1","measured_at":"2026-03-01T09:50:00Z","temperature":20.0,"battery":91.0,"status":"OK"}
+{"reading_id":"s1-r2","sensor_id":"s1","measured_at":"2026-03-01T10:10:00Z","temperature":22.0,"battery":90.0,"status":"OK"}
+{"reading_id":"s1-r3","sensor_id":"s1","measured_at":"2026-03-01T18:10:00+08:00","temperature":24.0,"battery":88.0,"status":"OK"}
+{"reading_id":"s1-r4","sensor_id":"s1","measured_at":"2026-03-01T10:59:59Z","temperature":26.0,"battery":87.0,"status":"OK"}
+{"reading_id":"s1-r5","sensor_id":"s1","measured_at":"2026-03-01T11:00:00Z","temperature":28.0,"battery":86.0,"status":"OK"}
+{"reading_id":"s1-r6","sensor_id":"s1","measured_at":"2026-03-01T11:30:00Z","temperature":30.0,"battery":85.0,"status":"OK"}
+{"reading_id":"s1-r7","sensor_id":"s1","measured_at":"2026-03-01T12:05:00Z","temperature":7.0,"battery":84.0,"status":"FAULT"}
+{"reading_id":"s2-r1","sensor_id":"s2","measured_at":"2026-03-01T10:05:00Z","temperature":500.0,"battery":60.0,"status":"OK"}
+{"reading_id":"s2-r2","sensor_id":"s2","measured_at":"2026-03-01T10:35:00Z","temperature":31.0,"battery":59.0,"status":"OK"}
+{"reading_id":"s2-r3","sensor_id":"s2","measured_at":"2026-03-01T11:15:00Z","temperature":35.0,"battery":58.0,"status":"OK"}
+{"reading_id":"s3-r1","sensor_id":"s3","measured_at":"2026-03-01T10:20:00Z","temperature":40.0,"battery":77.0,"status":"OK"}

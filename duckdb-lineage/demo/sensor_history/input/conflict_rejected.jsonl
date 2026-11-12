@@ -1,0 +1,2 @@
+{"reading_id":"s1-r2","sensor_id":"s1","measured_at":"2026-03-01T10:10:00Z","temperature":99.0,"battery":90.0,"status":"OK"}
+{"reading_id":"s1-r99","sensor_id":"s1","measured_at":"2026-03-01T13:00:00Z","temperature":21.0,"battery":83.0,"status":"OK"}

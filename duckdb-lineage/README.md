@@ -1,11 +1,15 @@
-# DuckDB SQL 列级血缘抽取器 + 视图组发布工具
+# DuckDB SQL 列级血缘抽取器 + 视图组发布工具 + 传感器历史补算链
 
-本仓库包含两个相互独立的工具：
+本仓库包含三个相互独立的工具：
 
 * **lineage**：面向分析数据集 *变更审查* 的列级血缘工具（下文）。
 * **viewctl**：把一组视图定义作为一个版本发布到 DuckDB 库文件的本地
   迁移工具（预览试装 / 事务应用 / 版本核对），见
   [`docs/viewctl.md`](docs/viewctl.md) 与 `demo/sensor/run_demo.py`。
+* **sensorpipe**：传感器历史读数的本地补算链——读数先入库，校准晚补录或
+  修改时在同一事务里重算受影响读数结论与小时指标，见
+  [`docs/sensor_history.md`](docs/sensor_history.md) 与
+  `demo/sensor_history/run_demo.py`。
 
 ---
 
@@ -44,12 +48,21 @@ duckdb-lineage/
 │   ├── refs.py                   # 对象引用提取（CTE/别名感知）、拓扑排序
 │   ├── registry.py               # 库内注册表（版本号/管理集/历史）
 │   ├── planner.py / core.py / cli.py / errors.py
+├── src/sensorpipe/               # 传感器历史补算链（与上面两者独立）
+│   ├── inputs.py                 # JSONL 逐行解析与字段校验
+│   ├── db.py                     # 表结构（原始读数/校准/明细/小时/影响范围）
+│   ├── core.py                   # 事务化导入/校准回补/小时重算/影响登记
+│   └── cli.py                    # init/ingest/calibrate/detail/hourly/runs/rebuild/status
 ├── demo/sensor/                  # 传感器三层视图两版发布演示（独立预期核对）
+├── demo/sensor_history/          # 历史补算演示（含真实 SIGKILL 恢复检查）
+├── tools/sensor_oracle.py        # 不复用线上逻辑的独立全量对照计算
 ├── scripts/                      # DuckDB 执行、期望核对、pytest、一键验证
 ├── tests/test_lineage.py         # 32 个血缘单元测试
 ├── tests/test_viewctl.py         # 25 个发布工具回归测试（实际开库核对）
+├── tests/test_sensorpipe.py      # 16 个补算链回归测试（实际开库核对）
 ├── docs/dialect_and_errors.md    # 方言范围、三类依赖语义与错误定位
 ├── docs/viewctl.md               # 清单格式、预览内容、版本核对与失败处理
+├── docs/sensor_history.md        # 输入格式、拒绝处理、缺校准补救、事务保证
 └── docs/root_cause.md            # 本次缺陷的根因说明
 ```
 
@@ -90,6 +103,17 @@ python3 -I src/lineage/cli.py batch \
 python3 -I src/viewctl/cli.py preview --db /path/sensor.duckdb \
   --assets demo/sensor/assets_v1
 python3 -I demo/sensor/run_demo.py   # 端到端演示（建库/播种/预览/发布/核对）
+
+# 7) 传感器历史读数补算（sensorpipe，独立于上面两个工具）
+python3 -I src/sensorpipe/cli.py init --db /tmp/sensor.duckdb
+python3 -I src/sensorpipe/cli.py ingest --db /tmp/sensor.duckdb \
+  --file demo/sensor_history/input/readings.jsonl
+python3 -I src/sensorpipe/cli.py calibrate --db /tmp/sensor.duckdb \
+  --file demo/sensor_history/input/calibrations_step1.jsonl
+python3 -I src/sensorpipe/cli.py detail  --db /tmp/sensor.duckdb
+python3 -I src/sensorpipe/cli.py hourly  --db /tmp/sensor.duckdb
+python3 -I demo/sensor_history/run_demo.py        # 端到端演示（含崩溃恢复）
+python3 -I tools/sensor_oracle.py --db DB --check # 独立全量对照
 ```
 
 ### 输出片段（图格式）
@@ -116,8 +140,10 @@ bash scripts/run_all.sh
    插入确定性数据，真实执行全部受支持样例（递归 CTE/动态 SQL/歧义列单独说明）。
 2. **核对手工标注**：`scripts/check_expected.py` 把抽取结果与
    `expected/expected_lineage.json` 的人工依赖集合逐项断言。
-3. `scripts/run_pytest.py` 跑 32 个单元测试；并对每个 SQL 重复运行比对 MD5，
-   证明 JSON 输出字节级确定。
+3. `scripts/run_pytest.py` 跑全部单元测试（血缘 + viewctl + sensorpipe）；
+   并对每个 SQL 重复运行比对 MD5，证明 JSON 输出字节级确定。
+4. 两个传感器演示：`demo/sensor/run_demo.py`（视图发布）与
+   `demo/sensor_history/run_demo.py`（历史补算 + 真实中断恢复）。
 
 ## 样例覆盖矩阵
 
