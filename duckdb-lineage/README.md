@@ -1,6 +1,6 @@
-# DuckDB SQL 列级血缘抽取器 + 视图组发布工具 + 传感器历史补算链 + 结果对账
+# DuckDB SQL 列级血缘抽取器 + 视图组发布工具 + 传感器历史补算链 + 结果对账 + 关系数据裁取
 
-本仓库包含四个相互独立的工具：
+本仓库包含五个相互独立的工具：
 
 * **lineage**：面向分析数据集 *变更审查* 的列级血缘工具（下文）。
 * **viewctl**：把一组视图定义作为一个版本发布到 DuckDB 库文件的本地
@@ -14,6 +14,10 @@
   清单实际执行新旧两条只读查询，按多重集合比较结果（忽略顺序、保留重复行、
   业务键分组、一对一最大匹配、精确数值与容差），见
   [`docs/sqlrecon.md`](docs/sqlrecon.md) 与 `demo/recon/run_demo.py`。
+* **relslice**：关系数据 **裁取** 工具——按 JSON 配方（基础表/身份列/
+  子表->父表引用/起始身份）从少量起始记录出发，只沿子表到父表方向补入
+  必需关联记录，产出可交给同事直接查询的 DuckDB 小库与追查说明，见
+  [`docs/relslice.md`](docs/relslice.md) 与 `demo/relslice/run_demo.py`。
 
 ---
 
@@ -64,9 +68,17 @@ duckdb-lineage/
 │   ├── compare.py                # 分组、精确/容差标量、Hopcroft-Karp 一对一最大匹配
 │   ├── encoding.py               # 不丢精度的自描述值编码（大整数/DECIMAL/NaN/Inf）
 │   └── engine.py / cli.py / errors.py
+├── src/relslice/                 # 关系数据裁取（与上面四者独立）
+│   ├── recipe.py                 # 配方加载与结构校验（表/身份列/引用/起点，带位置报错）
+│   ├── source.py                 # 只读源库：结构核对、身份唯一性/空值校验、按身份取行
+│   ├── closure.py                # 纯集合闭包算法（不依赖 duckdb）：单向追踪、环收敛、预算
+│   ├── writer.py                 # 目标库临时文件写入 + 硬链接原子发布（拒绝覆盖）
+│   └── engine.py / cli.py / errors.py
+├── demo/relslice/                # 裁取演示：建库/配方/独立集合算法核对/全场景矩阵
 ├── demo/sensor/                  # 传感器三层视图两版发布演示（独立预期核对）
 ├── demo/sensor_history/          # 历史补算演示（含真实 SIGKILL 恢复检查）
 ├── demo/recon/                   # 结果对账演示（建库/26 项清单/查询对/一键演示）
+├── demo/relslice/                # 关系裁取演示（建库/配方/独立集合算法核对）
 ├── tools/sensor_oracle.py        # 不复用线上逻辑的独立全量对照计算
 ├── tools/exhaustive_recon.py     # 独立穷举配对核对（不调用线上最大匹配函数）
 ├── scripts/                      # DuckDB 执行、期望核对、pytest、一键验证
@@ -74,10 +86,12 @@ duckdb-lineage/
 ├── tests/test_viewctl.py         # 34 个发布工具回归测试（实际开库核对）
 ├── tests/test_sensorpipe.py      # 17 个补算链回归测试（实际开库核对）
 ├── tests/test_sqlrecon.py        # 78 个对账回归测试（实际开库 + 穷举/确定性核对）
+├── tests/test_relslice.py        # 34 个裁取回归测试（纯集合 + 实际开库核对）
 ├── docs/dialect_and_errors.md    # 方言范围、三类依赖语义与错误定位
 ├── docs/viewctl.md               # 清单格式、预览内容、版本核对与失败处理
 ├── docs/sensor_history.md        # 输入格式、拒绝处理、缺校准补救、事务保证
 ├── docs/sqlrecon.md              # 对账规则格式、差异读法、三类运行结论
+├── docs/relslice.md              # 裁取配方、闭包语义、预算、追查说明与失败处理
 └── docs/root_cause.md            # 本次缺陷的根因说明
 ```
 
@@ -136,6 +150,14 @@ python3 -I src/sqlrecon/cli.py run \
   --db demo/recon/recon.duckdb \
   --manifest demo/recon/checks.json               # 退出码 0/1/2 = 相同/差异/检查错误
 python3 -I demo/recon/run_demo.py                 # 端到端演示（含穷举交叉核对）
+
+# 9) 关系数据裁取（relslice，独立于上面四个工具）
+python3 -I demo/relslice/build_db.py              # 构建演示业务库
+python3 -I src/relslice/cli.py extract \
+  --source demo/relslice/business.duckdb \
+  --recipe demo/relslice/recipe.json \
+  --target /tmp/extract.duckdb --budget 500       # 退出码 0/1/2 = 成功/裁取失败/命令错误
+python3 -I demo/relslice/run_demo.py              # 端到端演示（独立集合算法逐表核对）
 ```
 
 ### 输出片段（图格式）

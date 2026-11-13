@@ -1,6 +1,6 @@
 {
-  "database": "/workspace/duckdb-lineage/demo/recon/recon.duckdb",
-  "manifest": "/workspace/duckdb-lineage/demo/recon/checks.json",
+  "database": "demo/recon/recon.duckdb",
+  "manifest": "demo/recon/checks.json",
   "overall_status": "error",
   "summary": {
     "checks_total": 26,

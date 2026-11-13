@@ -1,0 +1,500 @@
+{
+  "status": "ok",
+  "source": "/workspace/duckdb-lineage/demo/relslice/business.duckdb",
+  "target": "/workspace/duckdb-lineage/demo/relslice/_work/out_main.duckdb",
+  "budget": {
+    "limit": null,
+    "used": 17
+  },
+  "tables": [
+    {
+      "table": "hr.employees",
+      "identity_columns": [
+        "emp_id"
+      ],
+      "selected_count": 4,
+      "selected": [
+        {
+          "identity": [
+            5
+          ],
+          "origin": {
+            "kind": "derived",
+            "seed": {
+              "table": "hr.employees",
+              "identity": [
+                7
+              ]
+            },
+            "path": [
+              {
+                "reference": "emp_manager",
+                "child": "hr.employees",
+                "child_identity": [
+                  7
+                ],
+                "parent": "hr.employees",
+                "parent_identity": [
+                  5
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "identity": [
+            7
+          ],
+          "origin": {
+            "kind": "seed"
+          }
+        },
+        {
+          "identity": [
+            8
+          ],
+          "origin": {
+            "kind": "derived",
+            "seed": {
+              "table": "hr.employees",
+              "identity": [
+                7
+              ]
+            },
+            "path": [
+              {
+                "reference": "emp_manager",
+                "child": "hr.employees",
+                "child_identity": [
+                  7
+                ],
+                "parent": "hr.employees",
+                "parent_identity": [
+                  5
+                ]
+              },
+              {
+                "reference": "emp_manager",
+                "child": "hr.employees",
+                "child_identity": [
+                  5
+                ],
+                "parent": "hr.employees",
+                "parent_identity": [
+                  8
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "identity": [
+            9
+          ],
+          "origin": {
+            "kind": "derived",
+            "seed": {
+              "table": "hr.employees",
+              "identity": [
+                7
+              ]
+            },
+            "path": [
+              {
+                "reference": "emp_manager",
+                "child": "hr.employees",
+                "child_identity": [
+                  7
+                ],
+                "parent": "hr.employees",
+                "parent_identity": [
+                  5
+                ]
+              },
+              {
+                "reference": "emp_manager",
+                "child": "hr.employees",
+                "child_identity": [
+                  5
+                ],
+                "parent": "hr.employees",
+                "parent_identity": [
+                  8
+                ]
+              },
+              {
+                "reference": "emp_manager",
+                "child": "hr.employees",
+                "child_identity": [
+                  8
+                ],
+                "parent": "hr.employees",
+                "parent_identity": [
+                  9
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "table": "shop.customers",
+      "identity_columns": [
+        "customer_id"
+      ],
+      "selected_count": 2,
+      "selected": [
+        {
+          "identity": [
+            1
+          ],
+          "origin": {
+            "kind": "derived",
+            "seed": {
+              "table": "shop.order_items",
+              "identity": [
+                1001,
+                1
+              ]
+            },
+            "path": [
+              {
+                "reference": "items_order",
+                "child": "shop.order_items",
+                "child_identity": [
+                  1001,
+                  1
+                ],
+                "parent": "shop.orders",
+                "parent_identity": [
+                  1001
+                ]
+              },
+              {
+                "reference": "orders_customer",
+                "child": "shop.orders",
+                "child_identity": [
+                  1001
+                ],
+                "parent": "shop.customers",
+                "parent_identity": [
+                  1
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "identity": [
+            3
+          ],
+          "origin": {
+            "kind": "derived",
+            "seed": {
+              "table": "shop.order_items",
+              "identity": [
+                1005,
+                1
+              ]
+            },
+            "path": [
+              {
+                "reference": "items_order",
+                "child": "shop.order_items",
+                "child_identity": [
+                  1005,
+                  1
+                ],
+                "parent": "shop.orders",
+                "parent_identity": [
+                  1005
+                ]
+              },
+              {
+                "reference": "orders_customer",
+                "child": "shop.orders",
+                "child_identity": [
+                  1005
+                ],
+                "parent": "shop.customers",
+                "parent_identity": [
+                  3
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "table": "shop.item_notes",
+      "identity_columns": [
+        "note_id"
+      ],
+      "selected_count": 1,
+      "selected": [
+        {
+          "identity": [
+            501
+          ],
+          "origin": {
+            "kind": "seed"
+          }
+        }
+      ]
+    },
+    {
+      "table": "shop.order_items",
+      "identity_columns": [
+        "order_id",
+        "line_no"
+      ],
+      "selected_count": 4,
+      "selected": [
+        {
+          "identity": [
+            1001,
+            1
+          ],
+          "origin": {
+            "kind": "seed"
+          }
+        },
+        {
+          "identity": [
+            1001,
+            2
+          ],
+          "origin": {
+            "kind": "seed"
+          }
+        },
+        {
+          "identity": [
+            1001,
+            3
+          ],
+          "origin": {
+            "kind": "seed"
+          }
+        },
+        {
+          "identity": [
+            1005,
+            1
+          ],
+          "origin": {
+            "kind": "seed"
+          }
+        }
+      ]
+    },
+    {
+      "table": "shop.orders",
+      "identity_columns": [
+        "order_id"
+      ],
+      "selected_count": 2,
+      "selected": [
+        {
+          "identity": [
+            1001
+          ],
+          "origin": {
+            "kind": "derived",
+            "seed": {
+              "table": "shop.order_items",
+              "identity": [
+                1001,
+                1
+              ]
+            },
+            "path": [
+              {
+                "reference": "items_order",
+                "child": "shop.order_items",
+                "child_identity": [
+                  1001,
+                  1
+                ],
+                "parent": "shop.orders",
+                "parent_identity": [
+                  1001
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "identity": [
+            1005
+          ],
+          "origin": {
+            "kind": "derived",
+            "seed": {
+              "table": "shop.order_items",
+              "identity": [
+                1005,
+                1
+              ]
+            },
+            "path": [
+              {
+                "reference": "items_order",
+                "child": "shop.order_items",
+                "child_identity": [
+                  1005,
+                  1
+                ],
+                "parent": "shop.orders",
+                "parent_identity": [
+                  1005
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "table": "shop.price_book",
+      "identity_columns": [
+        "region",
+        "sku"
+      ],
+      "selected_count": 2,
+      "selected": [
+        {
+          "identity": [
+            "north",
+            "P1"
+          ],
+          "origin": {
+            "kind": "derived",
+            "seed": {
+              "table": "shop.order_items",
+              "identity": [
+                1001,
+                1
+              ]
+            },
+            "path": [
+              {
+                "reference": "items_pricebook",
+                "child": "shop.order_items",
+                "child_identity": [
+                  1001,
+                  1
+                ],
+                "parent": "shop.price_book",
+                "parent_identity": [
+                  "north",
+                  "P1"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "identity": [
+            "north",
+            "P2"
+          ],
+          "origin": {
+            "kind": "derived",
+            "seed": {
+              "table": "shop.order_items",
+              "identity": [
+                1001,
+                2
+              ]
+            },
+            "path": [
+              {
+                "reference": "items_pricebook",
+                "child": "shop.order_items",
+                "child_identity": [
+                  1001,
+                  2
+                ],
+                "parent": "shop.price_book",
+                "parent_identity": [
+                  "north",
+                  "P2"
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "table": "shop.products",
+      "identity_columns": [
+        "sku"
+      ],
+      "selected_count": 2,
+      "selected": [
+        {
+          "identity": [
+            "P1"
+          ],
+          "origin": {
+            "kind": "derived",
+            "seed": {
+              "table": "shop.order_items",
+              "identity": [
+                1001,
+                1
+              ]
+            },
+            "path": [
+              {
+                "reference": "items_product",
+                "child": "shop.order_items",
+                "child_identity": [
+                  1001,
+                  1
+                ],
+                "parent": "shop.products",
+                "parent_identity": [
+                  "P1"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "identity": [
+            "P2"
+          ],
+          "origin": {
+            "kind": "derived",
+            "seed": {
+              "table": "shop.order_items",
+              "identity": [
+                1001,
+                2
+              ]
+            },
+            "path": [
+              {
+                "reference": "items_product",
+                "child": "shop.order_items",
+                "child_identity": [
+                  1001,
+                  2
+                ],
+                "parent": "shop.products",
+                "parent_identity": [
+                  "P2"
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
