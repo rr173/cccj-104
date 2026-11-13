@@ -1,9 +1,11 @@
 """源库只读访问：结构核对、身份合规校验、按身份取行。
 
-所有读取都发生在调用方（:mod:`relslice.engine`）开启的 **同一个读取事务**
-里——结构核对、唯一性/空值检查、起点取行、闭包追踪取行看到同一个数据
-快照，即"同一次一致的读取范围"。连接本身以 ``read_only=True`` 打开，源
-数据只读。
+会话形态：引擎建一个 **纯内存会话**，把源库以 ``READ_ONLY`` 挂载为目录
+``source``（见 :func:`open_source_session`）。源文件从不以可写方式打开；
+同一会话里还可以再挂一个可写的目标临时库（见 :mod:`relslice.writer`），
+使 **记录选择与数据搬运发生在同一个事务的同一次一致读取里**——结构核对、
+唯一性/空值检查、起点取行、闭包追踪取行、以及把入选行直接搬进目标库的
+``INSERT ... SELECT`` 看到同一个数据快照。
 
 结构核对规则（任一不符抛 :class:`SourceSchemaError`，带 ``location``）：
 
@@ -25,6 +27,9 @@ import duckdb
 from .errors import DatabaseOpenError, SourceSchemaError
 from .recipe import Recipe, TableRef
 
+# 源库在会话里的挂载目录名；本模块所有 SQL 都显式按它限定
+SOURCE_CATALOG = "source"
+
 # 身份列允许的逻辑类型：整数家族 + 字符串
 INTEGER_TYPES = {
     "TINYINT", "SMALLINT", "INTEGER", "BIGINT", "HUGEINT",
@@ -39,8 +44,17 @@ def quote_ident(name: str) -> str:
     return '"' + name.replace('"', '""') + '"'
 
 
-def qualified(ref: TableRef) -> str:
-    return f"{quote_ident(ref.schema)}.{quote_ident(ref.table)}"
+def quote_literal(value: str) -> str:
+    """字符串字量加单引号（内嵌引号翻倍），用于挂载路径等。"""
+    return "'" + value.replace("'", "''") + "'"
+
+
+def qualified(ref: TableRef, catalog: str | None = None) -> str:
+    """全限定表名；给 catalog 时生成三段式 ``"catalog"."schema"."table"``。"""
+    name = f"{quote_ident(ref.schema)}.{quote_ident(ref.table)}"
+    if catalog is not None:
+        return f"{quote_ident(catalog)}.{name}"
+    return name
 
 
 @dataclass(frozen=True)
@@ -76,10 +90,16 @@ class SourceCatalog:
     tables: dict[TableRef, TableMeta]
 
     def fetch_row(self, ref: TableRef, identity: tuple) -> dict[str, object] | None:
-        """按身份取整行；找不到返回 None。调用方保证身份无 NULL。"""
+        """按身份取整行；找不到返回 None。调用方保证身份无 NULL。
+
+        取回的行只用于闭包追踪（引用列值必为整数/字符串，经 Python 对象
+        往返无损）；**写往目标库的业务值不走这条路**——搬运由
+        :mod:`relslice.writer` 在同一事务里用 INSERT ... SELECT 完成，
+        不经过 Python 对象。
+        """
         meta = self.tables[ref]
         where = " AND ".join(f"{quote_ident(c)} = ?" for c in meta.identity)
-        sql = f"SELECT * FROM {qualified(ref)} WHERE {where}"
+        sql = f"SELECT * FROM {qualified(ref, SOURCE_CATALOG)} WHERE {where}"
         cur = self.con.execute(sql, list(identity))
         row = cur.fetchone()
         if row is None:
@@ -88,18 +108,28 @@ class SourceCatalog:
         return dict(zip(cols, row))
 
 
-def open_read_only(db_path: str | Path) -> duckdb.DuckDBPyConnection:
-    """以只读方式打开源库；打不开明确报错。"""
+def open_source_session(db_path: str | Path) -> duckdb.DuckDBPyConnection:
+    """新建内存会话并把源库以只读挂载为目录 ``source``；打不开明确报错。
+
+    返回的连接自身不落盘（内存会话），源文件以 ``READ_ONLY`` 挂载，全程
+    不会被写入；调用方可在同一会话再挂可写的目标临时库。
+    """
     path = Path(db_path)
     if not path.exists():
         raise DatabaseOpenError(f"源数据库文件不存在: {path}", database=str(path))
+    con = duckdb.connect()  # 纯内存会话：自身不产生任何文件
     try:
-        return duckdb.connect(str(path), read_only=True)
+        con.execute(
+            f"ATTACH {quote_literal(str(path))} AS {quote_ident(SOURCE_CATALOG)} "
+            "(READ_ONLY)"
+        )
     except duckdb.Error as ex:
+        con.close()
         raise DatabaseOpenError(
             f"无法以只读方式打开源数据库 {path}: {ex}",
             database=str(path),
         ) from ex
+    return con
 
 
 def _err(message: str, location: str, **details: object) -> SourceSchemaError:
@@ -108,15 +138,15 @@ def _err(message: str, location: str, **details: object) -> SourceSchemaError:
 
 def _describe_table(con: duckdb.DuckDBPyConnection, ref: TableRef) -> tuple[ColumnMeta, ...]:
     """用 LIMIT 0 查询拿到按定义顺序的列名与精确逻辑类型文本。"""
-    cur = con.execute(f"SELECT * FROM {qualified(ref)} LIMIT 0")
+    cur = con.execute(f"SELECT * FROM {qualified(ref, SOURCE_CATALOG)} LIMIT 0")
     return tuple(ColumnMeta(name=d[0], type_text=str(d[1])) for d in cur.description)
 
 
 def _check_base_table(con: duckdb.DuckDBPyConnection, ref: TableRef, where: str) -> None:
     rows = con.execute(
         "SELECT table_type FROM information_schema.tables "
-        "WHERE table_schema = ? AND table_name = ?",
-        [ref.schema, ref.table],
+        "WHERE table_catalog = ? AND table_schema = ? AND table_name = ?",
+        [SOURCE_CATALOG, ref.schema, ref.table],
     ).fetchall()
     if not rows:
         raise _err(f"{where} 表 '{ref}' 在源库中不存在", where, table=str(ref))
@@ -147,7 +177,7 @@ def _check_identity_columns(
             )
     null_cond = " OR ".join(f"{quote_ident(c)} IS NULL" for c in meta.identity)
     n_null = con.execute(
-        f"SELECT COUNT(*) FROM {qualified(meta.ref)} WHERE {null_cond}"
+        f"SELECT COUNT(*) FROM {qualified(meta.ref, SOURCE_CATALOG)} WHERE {null_cond}"
     ).fetchone()[0]
     if n_null:
         raise _err(
@@ -159,7 +189,7 @@ def _check_identity_columns(
         )
     group_cols = ", ".join(quote_ident(c) for c in meta.identity)
     dup_rows = con.execute(
-        f"SELECT {group_cols}, COUNT(*) AS n FROM {qualified(meta.ref)} "
+        f"SELECT {group_cols}, COUNT(*) AS n FROM {qualified(meta.ref, SOURCE_CATALOG)} "
         f"GROUP BY {group_cols} HAVING COUNT(*) > 1 LIMIT 3"
     ).fetchall()
     if dup_rows:

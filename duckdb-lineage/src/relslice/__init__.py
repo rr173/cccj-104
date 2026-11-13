@@ -25,6 +25,7 @@ from .errors import (
     SliceError,
     SourceSchemaError,
     TargetExistsError,
+    TargetWriteError,
 )
 from .recipe import Recipe, ReferenceSpec, SeedSpec, TableRef, TableSpec, load_recipe
 
@@ -45,6 +46,7 @@ __all__ = [
     "SourceSchemaError",
     "DatabaseOpenError",
     "TargetExistsError",
+    "TargetWriteError",
     "SeedNotFoundError",
     "BrokenReferenceError",
     "BudgetExceededError",

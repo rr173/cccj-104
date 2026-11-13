@@ -3,7 +3,7 @@
 #   1) DuckDB 实际执行样例
 #   2) 手工标注依赖集合核对
 #   3) pytest 单元测试（血缘 + viewctl + sensorpipe + sqlrecon + relslice）
-#   4) 两个 DuckDB 因果复现脚本
+#   4) 三个 DuckDB 因果/保真复现脚本
 #   5) JSON 确定性检查（重复运行比对哈希）
 #   6) viewctl 传感器视图两版发布演示（实际建库核对业务数值）
 #   7) sensorpipe 历史读数补算演示 + 独立全量对照
@@ -27,9 +27,10 @@ echo "############ 3/10 pytest 单元测试 ############"
 python3 -I scripts/run_pytest.py tests/ -q
 
 echo
-echo "############ 4/10 DuckDB 因果复现 ############"
+echo "############ 4/10 DuckDB 因果/保真复现 ############"
 python3 -I repro/repro_row_existence.py
 python3 -I repro/repro_exists_scalar_aggregate.py
+python3 -I repro/repro_relslice_value_fidelity.py
 
 echo
 echo "############ 5/10 JSON 确定性检查（重复运行比对哈希）############"

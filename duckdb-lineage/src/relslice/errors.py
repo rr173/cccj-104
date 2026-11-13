@@ -10,8 +10,9 @@
   :class:`BudgetExceededError`）——配方与源结构都没问题，但按规则追踪时
   找不到起始身份、选中记录引用了不存在的父记录、或必需记录超出预算。
   这类失败与数据内容有关，退出码与配方错误分开。
-* 命令级问题（:class:`DatabaseOpenError` / :class:`TargetExistsError`）——
-  源库打不开、目标文件已存在等。
+* 命令级问题（:class:`DatabaseOpenError` / :class:`TargetExistsError` /
+  :class:`TargetWriteError`）——源库打不开、目标文件已存在、目标临时库
+  写出中途失败（如磁盘写满）等。
 
 所有异常都带稳定 ``code``，由 CLI 收口为退出码与 JSON 错误载荷。
 """
@@ -59,6 +60,13 @@ class TargetExistsError(SliceError):
     """目标文件已存在；裁取绝不覆盖已有内容。"""
 
     code = "target_exists"
+
+
+class TargetWriteError(SliceError):
+    """目标临时库写出中途失败（挂载/建表/搬运/提交任一环节）；临时文件已清理，
+    目标位置不留半成品。"""
+
+    code = "target_write_error"
 
 
 class SeedNotFoundError(SliceError):

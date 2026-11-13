@@ -70,9 +70,9 @@ duckdb-lineage/
 │   └── engine.py / cli.py / errors.py
 ├── src/relslice/                 # 关系数据裁取（与上面四者独立）
 │   ├── recipe.py                 # 配方加载与结构校验（表/身份列/引用/起点，带位置报错）
-│   ├── source.py                 # 只读源库：结构核对、身份唯一性/空值校验、按身份取行
+│   ├── source.py                 # 源库只读挂载：结构核对、身份唯一性/空值校验、按身份取行
 │   ├── closure.py                # 纯集合闭包算法（不依赖 duckdb）：单向追踪、环收敛、预算
-│   ├── writer.py                 # 目标库临时文件写入 + 硬链接原子发布（拒绝覆盖）
+│   ├── writer.py                 # 同事务原生搬运（INSERT...SELECT）+ 硬链接原子发布（拒绝覆盖）
 │   └── engine.py / cli.py / errors.py
 ├── demo/relslice/                # 裁取演示：建库/配方/独立集合算法核对/全场景矩阵
 ├── demo/sensor/                  # 传感器三层视图两版发布演示（独立预期核对）
@@ -87,11 +87,13 @@ duckdb-lineage/
 ├── tests/test_sensorpipe.py      # 17 个补算链回归测试（实际开库核对）
 ├── tests/test_sqlrecon.py        # 78 个对账回归测试（实际开库 + 穷举/确定性核对）
 ├── tests/test_relslice.py        # 34 个裁取回归测试（纯集合 + 实际开库核对）
+├── tests/test_relslice_fidelity.py # 9 个裁取值保真/一致性回归（库内精确表达式核对）
 ├── docs/dialect_and_errors.md    # 方言范围、三类依赖语义与错误定位
 ├── docs/viewctl.md               # 清单格式、预览内容、版本核对与失败处理
 ├── docs/sensor_history.md        # 输入格式、拒绝处理、缺校准补救、事务保证
 ├── docs/sqlrecon.md              # 对账规则格式、差异读法、三类运行结论
 ├── docs/relslice.md              # 裁取配方、闭包语义、预算、追查说明与失败处理
+├── docs/relslice_value_fidelity.md # 裁取值损失的根因说明（纳秒/间隔成分）
 └── docs/root_cause.md            # 本次缺陷的根因说明
 ```
 
@@ -219,6 +221,8 @@ bash scripts/run_all.sh
 python3 -I repro/repro_row_existence.py
 # 2) EXISTS 投影占位、标量 NULL、空输入聚合（三类原因分开）
 python3 -I repro/repro_exists_scalar_aggregate.py
+# 3) relslice 裁取值保真（TIMESTAMP_NS 纳秒 / INTERVAL 月份成分）
+python3 -I repro/repro_relslice_value_fidelity.py
 ```
 
 `repro_exists_scalar_aggregate.py` 用 DuckDB 建小数据，逐次删除/恢复匹配记录，
